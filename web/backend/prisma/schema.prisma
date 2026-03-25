@@ -1,0 +1,37 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+}
+
+model Robot {
+  id        Int         @id @default(autoincrement())
+  name      String
+  status    RobotStatus @default(OFFLINE)
+  battery   Int         @default(100)
+  createdAt DateTime    @default(now())
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum RobotStatus {
+  AVAILABLE
+  BUSY
+  OFFLINE
+  ERROR
+}

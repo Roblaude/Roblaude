@@ -37,6 +37,8 @@ jobs:
     defaults:
       run:
         working-directory: web/backend
+    env:
+      DATABASE_URL: mysql://root:root@localhost:3306/roblaude
 
     steps:
       - uses: actions/checkout@v4
@@ -49,3 +51,4 @@ jobs:
 
       - run: npm ci
       - run: npm run build
+

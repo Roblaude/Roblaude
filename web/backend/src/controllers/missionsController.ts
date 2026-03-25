@@ -129,3 +129,63 @@ export async function createMission(req: Request, res: Response) {
 
   res.status(201).json({ data: mission })
 }
+
+// états depuis lesquels on peut annuler
+const CANCELLABLE_STATUSES: MissionStatus[] = [
+  MissionStatus.PENDING,
+  MissionStatus.PAUSED,
+  MissionStatus.NAVIGATING_TO_PICKUP,
+  MissionStatus.WAITING_FOR_LOAD,
+  MissionStatus.NAVIGATING_TO_DESTINATION,
+]
+
+export async function cancelMission(req: Request, res: Response) {
+  const id = parseInt(req.params.id, 10)
+  if (isNaN(id)) {
+    res.status(400).json({ error: 'ID invalide' })
+    return
+  }
+
+  const mission = await prisma.mission.findUnique({
+    where: { id },
+    include: { robot: true },
+  })
+
+  if (!mission) {
+    res.status(404).json({ error: 'Mission introuvable' })
+    return
+  }
+
+  if (!CANCELLABLE_STATUSES.includes(mission.status)) {
+    res.status(400).json({
+      error: 'Mission non annulable',
+      status: mission.status,
+    })
+    return
+  }
+
+  // transaction : annuler la mission + libérer le robot si assigné
+  const updated = await prisma.$transaction(async (tx) => {
+    const cancelled = await tx.mission.update({
+      where: { id },
+      data: { status: MissionStatus.CANCELLED },
+      include: {
+        fromPoint: true,
+        toPoint: true,
+        robot: { select: { id: true, name: true, status: true } },
+        user: { select: { id: true, name: true, email: true } },
+      },
+    })
+
+    if (mission.robotId) {
+      await tx.robot.update({
+        where: { id: mission.robotId },
+        data: { status: RobotStatus.AVAILABLE },
+      })
+    }
+
+    return cancelled
+  })
+
+  res.json({ data: updated })
+}

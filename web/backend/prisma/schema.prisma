@@ -8,25 +8,93 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
+  id        Int       @id @default(autoincrement())
+  email     String    @unique
   password  String
   name      String
-  role      Role     @default(USER)
-  createdAt DateTime @default(now())
+  role      Role      @default(USER)
+  createdAt DateTime  @default(now())
+  missions  Mission[]
 }
 
 model Robot {
   id        Int         @id @default(autoincrement())
   name      String
   status    RobotStatus @default(OFFLINE)
+  positionX Float?
+  positionY Float?
+  heading   Float?
   battery   Int         @default(100)
   createdAt DateTime    @default(now())
+  missions  Mission[]
+}
+
+model Point {
+  id          Int       @id @default(autoincrement())
+  name        String
+  slug        String    @unique
+  x           Float
+  y           Float
+  theta       Float     @default(0)
+  description String?
+  missionsFrom Mission[] @relation("fromPoint")
+  missionsTo   Mission[] @relation("toPoint")
+  objects     GraspObject[]
+}
+
+model GraspObject {
+  id        Int      @id @default(autoincrement())
+  name      String
+  imageUrl  String?
+  available Boolean  @default(true)
+  locationId Int
+  location  Point    @relation(fields: [locationId], references: [id])
+  missions  Mission[]
+}
+
+model Mission {
+  id            Int           @id @default(autoincrement())
+  type          MissionType
+  status        MissionStatus @default(PENDING)
+  userId        Int
+  user          User          @relation(fields: [userId], references: [id])
+  fromPointId   Int
+  fromPoint     Point         @relation("fromPoint", fields: [fromPointId], references: [id])
+  toPointId     Int
+  toPoint       Point         @relation("toPoint", fields: [toPointId], references: [id])
+  robotId       Int?
+  robot         Robot?        @relation(fields: [robotId], references: [id])
+  objectId      Int?
+  object        GraspObject?  @relation(fields: [objectId], references: [id])
+  failureReason String?
+  graspAttempts Int           @default(0)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 }
 
 enum Role {
   USER
   ADMIN
+}
+
+enum MissionType {
+  TRANSPORT
+  PICK_AND_PLACE
+}
+
+enum MissionStatus {
+  PENDING
+  NAVIGATING_TO_PICKUP
+  WAITING_FOR_LOAD
+  NAVIGATING_TO_DESTINATION
+  DETECTING_OBJECT
+  GRASPING
+  TRANSPORTING
+  DEPOSITING
+  COMPLETED
+  FAILED
+  CANCELLED
+  PAUSED
 }
 
 enum RobotStatus {

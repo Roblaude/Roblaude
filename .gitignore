@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+build/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Python / ROS2
+__pycache__/
+*.pyc
+*.egg-info/
+log/
+install/
+build/
+
+# Test
+coverage/
+
+# Docker
+*.log
+
+# Config
+claude.md
+.claude/

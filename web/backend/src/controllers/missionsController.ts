@@ -1,5 +1,5 @@
 import { Request, Response } from 'express'
-import { MissionStatus, MissionType, RobotStatus } from '@prisma/client'
+import { MissionStatus } from '@prisma/client'
 import { z } from 'zod'
 import prisma from '../lib/prisma'
 
@@ -55,77 +55,4 @@ export async function listMissions(req: Request, res: Response) {
     page,
     limit,
   })
-}
-
-// body pour POST /api/missions
-const createMissionSchema = z.object({
-  type: z.nativeEnum(MissionType),
-  fromPointId: z.number().int().positive(),
-  toPointId: z.number().int().positive(),
-  robotId: z.number().int().positive().optional(),
-  objectId: z.number().int().positive().optional(),
-  // todo: userId viendra du token JWT — hardcodé à 1 pour l'instant
-})
-
-export async function createMission(req: Request, res: Response) {
-  const parsed = createMissionSchema.safeParse(req.body)
-  if (!parsed.success) {
-    res.status(400).json({
-      error: 'Données invalides',
-      details: parsed.error.issues.map((e) => ({
-        field: e.path.join('.'),
-        message: e.message,
-      })),
-    })
-    return
-  }
-
-  const { type, fromPointId, toPointId, robotId, objectId } = parsed.data
-
-  // vérifier que les points existent
-  const [fromPoint, toPoint] = await Promise.all([
-    prisma.point.findUnique({ where: { id: fromPointId } }),
-    prisma.point.findUnique({ where: { id: toPointId } }),
-  ])
-
-  if (!fromPoint) {
-    res.status(400).json({ error: 'Point de départ introuvable', field: 'fromPointId' })
-    return
-  }
-  if (!toPoint) {
-    res.status(400).json({ error: 'Point d\'arrivée introuvable', field: 'toPointId' })
-    return
-  }
-
-  // vérifier que le robot est dispo si précisé
-  if (robotId) {
-    const robot = await prisma.robot.findUnique({ where: { id: robotId } })
-    if (!robot) {
-      res.status(400).json({ error: 'Robot introuvable', field: 'robotId' })
-      return
-    }
-    if (robot.status === RobotStatus.BUSY) {
-      res.status(409).json({ error: 'Robot occupé', status: robot.status })
-      return
-    }
-  }
-
-  const mission = await prisma.mission.create({
-    data: {
-      type,
-      fromPointId,
-      toPointId,
-      robotId: robotId ?? null,
-      objectId: objectId ?? null,
-      userId: 1, // todo: extraire du JWT
-    },
-    include: {
-      fromPoint: true,
-      toPoint: true,
-      robot: { select: { id: true, name: true, status: true } },
-      user: { select: { id: true, name: true, email: true } },
-    },
-  })
-
-  res.status(201).json({ data: mission })
 }

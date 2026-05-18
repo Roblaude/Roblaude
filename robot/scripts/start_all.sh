@@ -14,6 +14,9 @@ ROBLAUDE_WS="${ROBLAUDE_WS:-/root/roblaude_ws}"
 YAHBOOM_WS="${YAHBOOM_WS:-/root/yahboomcar_ws}"
 mkdir -p /tmp/roslogs
 
+# PIDs des process lances, pour la verification finale
+declare -A LAUNCH_PIDS
+
 launch_bg() {
     local name="$1"; shift
     echo "-> lance $name"
@@ -23,15 +26,18 @@ launch_bg() {
         source $ROBLAUDE_WS/install/setup.bash 2>/dev/null
         export ROS_DOMAIN_ID=30
         $*
-    " > /tmp/roslogs/$name.log 2>&1 &
+    " > "/tmp/roslogs/$name.log" 2>&1 &
+    LAUNCH_PIDS[$name]=$!
 }
 
-# Tuer d anciennes instances pour repartir propre
-pkill -f foxglove_bridge    2>/dev/null
-pkill -f web_video_server   2>/dev/null
-pkill -f async_slam_toolbox 2>/dev/null
-pkill -f scan_restamper     2>/dev/null
-pkill -f odom_to_tf         2>/dev/null
+# Tuer d anciennes instances pour repartir propre.
+# Le '|| true' est explicite : si rien ne tourne, pkill renvoie 1 — ce
+# n'est pas une erreur ici.
+pkill -f foxglove_bridge    2>/dev/null || true
+pkill -f web_video_server   2>/dev/null || true
+pkill -f async_slam_toolbox 2>/dev/null || true
+pkill -f scan_restamper     2>/dev/null || true
+pkill -f odom_to_tf         2>/dev/null || true
 sleep 2
 
 # 1) Bridges de visualisation (package roblaude_nav)
@@ -55,6 +61,25 @@ sleep 8
 # 5) SLAM (utilise /scan_stamped)
 launch_bg slam      "ros2 launch roblaude_nav slam.launch.py"
 
+# Verification : chaque process est-il toujours vivant 3s apres lancement ?
+sleep 3
 echo ""
-echo "✅ Stack demarree. Logs : /tmp/roslogs/*.log"
+echo "=== Etat des composants ==="
+all_ok=true
+for name in "${!LAUNCH_PIDS[@]}"; do
+    pid=${LAUNCH_PIDS[$name]}
+    if kill -0 "$pid" 2>/dev/null; then
+        echo "  ✅ $name (pid $pid)"
+    else
+        echo "  ❌ $name a quitte — voir /tmp/roslogs/$name.log"
+        all_ok=false
+    fi
+done
+
+echo ""
+if $all_ok; then
+    echo "✅ Stack demarree. Logs : /tmp/roslogs/*.log"
+else
+    echo "⚠️  Certains composants ont quitte — verifier les logs ci-dessus."
+fi
 echo "Verif : ros2 topic hz /scan_stamped  (doit etre ~7 Hz)"

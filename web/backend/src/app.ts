@@ -1,4 +1,5 @@
 import express from 'express'
+import cors from 'cors'
 import { errorHandler } from './middleware/errorHandler'
 import { authGuard } from './middleware/auth'
 import authRouter from './routes/auth'
@@ -7,6 +8,13 @@ import pointsRouter from './routes/points'
 import robotsRouter from './routes/robots'
 
 const app = express()
+
+// CORS — le frontend (Vite, port 5173) et le backend (3001) sont sur des
+// origines differentes : sans CORS le navigateur bloque les requetes.
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  credentials: true,
+}))
 
 app.use(express.json())
 

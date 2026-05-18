@@ -1,7 +1,21 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'roblaude-dev-secret-change-in-prod'
+// Pas de valeur par defaut : un secret en dur dans le code serait public
+// (visible sur GitHub) et permettrait de forger des tokens. Si la variable
+// est absente, le serveur refuse de demarrer.
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET
+  if (!secret) {
+    throw new Error(
+      'JWT_SECRET manquant. Definis-le dans web/backend/.env ' +
+      '(genere une cle avec : openssl rand -base64 32)'
+    )
+  }
+  return secret
+}
+
+const JWT_SECRET = getJwtSecret()
 
 export interface JwtPayload {
   userId: number

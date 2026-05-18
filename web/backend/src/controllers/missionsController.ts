@@ -57,6 +57,32 @@ export async function listMissions(req: Request, res: Response) {
   })
 }
 
+export async function getMission(req: Request, res: Response) {
+  const id = parseInt(req.params.id, 10)
+  if (isNaN(id)) {
+    res.status(400).json({ error: 'ID invalide' })
+    return
+  }
+
+  const mission = await prisma.mission.findUnique({
+    where: { id },
+    include: {
+      fromPoint: true,
+      toPoint: true,
+      robot: { select: { id: true, name: true, status: true, battery: true, positionX: true, positionY: true } },
+      user: { select: { id: true, name: true, email: true } },
+      object: true,
+    },
+  })
+
+  if (!mission) {
+    res.status(404).json({ error: 'Mission introuvable' })
+    return
+  }
+
+  res.json({ data: mission })
+}
+
 // body pour POST /api/missions
 const createMissionSchema = z.object({
   type: z.nativeEnum(MissionType),
@@ -117,7 +143,7 @@ export async function createMission(req: Request, res: Response) {
       toPointId,
       robotId: robotId ?? null,
       objectId: objectId ?? null,
-      userId: 1, // todo: extraire du JWT
+      userId: req.user?.userId ?? 1,
     },
     include: {
       fromPoint: true,

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { apiFetch } from '@/lib/api'
 
 export type MissionStatus =
   | 'PENDING' | 'NAVIGATING_TO_PICKUP' | 'WAITING_FOR_LOAD'
@@ -47,8 +48,6 @@ interface MissionStore {
   setCurrentMission: (mission: Mission | null) => void
 }
 
-const API = '/api'
-
 export const useMissionStore = create<MissionStore>((set, get) => ({
   missions: [],
   currentMission: null,
@@ -69,7 +68,7 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
       if (filters.type) params.set('type', filters.type)
       params.set('page', String(filters.page))
       params.set('limit', String(filters.limit))
-      const res = await fetch(`${API}/missions?${params}`)
+      const res = await apiFetch(`/missions?${params}`)
       if (!res.ok) throw new Error('Erreur chargement missions')
       const json = await res.json() as { data: Mission[]; total: number }
       set({ missions: json.data, total: json.total })
@@ -81,9 +80,8 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
   },
 
   createMission: async (data) => {
-    const res = await fetch(`${API}/missions`, {
+    const res = await apiFetch(`/missions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     })
     if (!res.ok) {
@@ -96,7 +94,7 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
   },
 
   cancelMission: async (id) => {
-    const res = await fetch(`${API}/missions/${id}/cancel`, { method: 'POST' })
+    const res = await apiFetch(`/missions/${id}/cancel`, { method: 'POST' })
     if (!res.ok) {
       const err = await res.json() as { error: string }
       throw new Error(err.error)

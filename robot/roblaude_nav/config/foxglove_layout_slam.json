@@ -1,0 +1,164 @@
+{
+  "configById": {
+    "3D!slam-view": {
+      "cameraState": {
+        "distance": 12,
+        "perspective": true,
+        "phi": 60,
+        "target": [0, 0, 0],
+        "targetOffset": [0, 0, 0],
+        "targetOrientation": [0, 0, 0, 1],
+        "thetaOffset": 0,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "followTf": "base_link",
+      "scene": {
+        "backgroundColor": "#1a1a1a",
+        "enableStats": false,
+        "meshUpAxis": "y_up"
+      },
+      "transforms": {
+        "frame:map": { "visible": true },
+        "frame:odom": { "visible": true },
+        "frame:base_link": { "visible": true }
+      },
+      "topics": {
+        "/scan_stamped": {
+          "visible": true,
+          "colorField": "intensity",
+          "colorMode": "colormap",
+          "colorMap": "turbo",
+          "pointSize": 3
+        },
+        "/map": {
+          "visible": true,
+          "alpha": 0.85,
+          "colorMode": "map"
+        },
+        "/slam_toolbox/graph_visualization": {
+          "visible": true
+        },
+        "/robot_description": {
+          "visible": true
+        },
+        "/move_base_simple/goal": {
+          "visible": true
+        }
+      },
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/goal_pose",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {},
+      "followTfEnabled": true
+    },
+    "Teleop!robot-cmd": {
+      "topic": "/cmd_vel",
+      "publishRate": 10,
+      "upButton": {
+        "field": "linear-x",
+        "value": 0.12
+      },
+      "downButton": {
+        "field": "linear-x",
+        "value": -0.12
+      },
+      "leftButton": {
+        "field": "angular-z",
+        "value": 0.4
+      },
+      "rightButton": {
+        "field": "angular-z",
+        "value": -0.4
+      }
+    },
+    "Plot!robot-telemetry": {
+      "paths": [
+        {
+          "value": "/odom.pose.pose.position.x",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "X (m)",
+          "color": "#e74c3c"
+        },
+        {
+          "value": "/odom.pose.pose.position.y",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "Y (m)",
+          "color": "#2ecc71"
+        },
+        {
+          "value": "/odom.twist.twist.linear.x",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "Vit. lin. (m/s)",
+          "color": "#3498db"
+        },
+        {
+          "value": "/battery.data",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "Batterie (V)",
+          "color": "#f39c12"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": true,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240
+    },
+    "Image!camera-rgb": {
+      "cameraState": {
+        "distance": 3,
+        "perspective": false
+      },
+      "imageMode": {
+        "imageTopic": "/camera/color/image_raw",
+        "calibrationTopic": "/camera/color/camera_info",
+        "synchronize": false
+      }
+    },
+    "RawMessages!slam-status": {
+      "diffEnabled": false,
+      "diffMethod": "custom",
+      "diffTopicPath": "",
+      "showFullMessageForDiff": false,
+      "topicPath": "/slam_toolbox/feedback"
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": {
+    "first": {
+      "first": "3D!slam-view",
+      "second": {
+        "first": "Teleop!robot-cmd",
+        "second": "Image!camera-rgb",
+        "direction": "column",
+        "splitPercentage": 45
+      },
+      "direction": "row",
+      "splitPercentage": 65
+    },
+    "second": "Plot!robot-telemetry",
+    "direction": "column",
+    "splitPercentage": 70
+  }
+}

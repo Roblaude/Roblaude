@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { apiFetch } from '@/lib/api'
 
 export type MissionStatus =
   | 'PENDING' | 'NAVIGATING_TO_PICKUP' | 'WAITING_FOR_LOAD'
@@ -41,13 +42,12 @@ interface MissionStore {
   total: number
   filters: MissionFilters
   setFilters: (filters: Partial<MissionFilters>) => void
-  fetchMissions: () => Promise<void>
+  // override : filtres ponctuels non persistes (ex: dashboard = stats globales)
+  fetchMissions: (override?: Partial<MissionFilters>) => Promise<void>
   createMission: (data: { type: MissionType; fromPointId: number; toPointId: number; robotId?: number }) => Promise<Mission>
   cancelMission: (id: number) => Promise<void>
   setCurrentMission: (mission: Mission | null) => void
 }
-
-const API = '/api'
 
 export const useMissionStore = create<MissionStore>((set, get) => ({
   missions: [],
@@ -60,16 +60,16 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
   setFilters: (filters) =>
     set((s) => ({ filters: { ...s.filters, ...filters } })),
 
-  fetchMissions: async () => {
+  fetchMissions: async (override) => {
     set({ loading: true, error: null })
     try {
-      const { filters } = get()
+      const filters = { ...get().filters, ...override }
       const params = new URLSearchParams()
       if (filters.status) params.set('status', filters.status)
       if (filters.type) params.set('type', filters.type)
       params.set('page', String(filters.page))
       params.set('limit', String(filters.limit))
-      const res = await fetch(`${API}/missions?${params}`)
+      const res = await apiFetch(`/missions?${params}`)
       if (!res.ok) throw new Error('Erreur chargement missions')
       const json = await res.json() as { data: Mission[]; total: number }
       set({ missions: json.data, total: json.total })
@@ -81,9 +81,8 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
   },
 
   createMission: async (data) => {
-    const res = await fetch(`${API}/missions`, {
+    const res = await apiFetch(`/missions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     })
     if (!res.ok) {
@@ -96,7 +95,7 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
   },
 
   cancelMission: async (id) => {
-    const res = await fetch(`${API}/missions/${id}/cancel`, { method: 'POST' })
+    const res = await apiFetch(`/missions/${id}/cancel`, { method: 'POST' })
     if (!res.ok) {
       const err = await res.json() as { error: string }
       throw new Error(err.error)

@@ -30,6 +30,8 @@ jobs:
       - run: npm ci
       - run: npx eslint .
       - run: npm run build
+      # --passWithNoTests : ne casse pas tant que les tests ne sont pas sur dev
+      - run: npm test -- --passWithNoTests
 
   backend:
     name: Backend
@@ -39,6 +41,7 @@ jobs:
         working-directory: web/backend
     env:
       DATABASE_URL: mysql://root:root@localhost:3306/roblaude
+      JWT_SECRET: ci-test-secret-pas-pour-la-prod
 
     steps:
       - uses: actions/checkout@v4
@@ -51,4 +54,5 @@ jobs:
 
       - run: npm ci
       - run: npm run build
+      - run: npm test -- --passWithNoTests
 

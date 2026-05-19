@@ -384,6 +384,12 @@ function ConnectionBadge({
   connected: boolean
   lastSync: number | null
 }) {
+  // tick chaque seconde pour que le compteur "Xs" avance tout seul
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [])
   return (
     <span
       className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-sm border
@@ -399,7 +405,7 @@ function ConnectionBadge({
       </span>
       {connected && lastSync && (
         <span className="text-[9px] tabular-nums text-muted-foreground">
-          · {Math.max(0, Math.floor((Date.now() - lastSync) / 1000))}s
+          · {Math.max(0, Math.floor((now - lastSync) / 1000))}s
         </span>
       )}
     </span>
@@ -657,9 +663,13 @@ function LogStream({
 
   const [visible, setVisible] = useState(0)
   const [now, setNow] = useState(() => clockShort())
-  useEffect(() => {
+  // reset l'animation quand le contenu du journal change — pattern React
+  // "ajuster un state pendant le render" plutot qu'un effet
+  const [prevLines, setPrevLines] = useState(lines)
+  if (prevLines !== lines) {
+    setPrevLines(lines)
     setVisible(0)
-  }, [lines])
+  }
   useEffect(() => {
     if (visible >= lines.length) return
     const id = setTimeout(() => setVisible((v) => v + 1), 180)

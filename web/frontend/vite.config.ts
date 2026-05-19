@@ -31,13 +31,25 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'RobLaude',
+        name: 'RobLaude — Assistant Robotique',
         short_name: 'RobLaude',
-        description: 'Robot d\'assistance autonome',
-        theme_color: '#ffffff',
+        description: "Robot d'assistance autonome pour personnes a mobilite reduite en ERP",
+        lang: 'fr',
+        theme_color: '#7c3aed',
+        background_color: '#0a0a0a',
+        display: 'standalone',
+        orientation: 'portrait',
+        start_url: '/',
+        scope: '/',
         icons: [
           { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          {
+            src: '/pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
         ],
       },
     }),

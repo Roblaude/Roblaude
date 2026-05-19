@@ -118,10 +118,12 @@ Tout payload est du **JSON UTF-8** et contient au minimum :
 - `schemaVersion` (int) — version du format. Incrémentée à tout changement
   cassant. Un consommateur qui reçoit une version inconnue **log et ignore**.
 - `timestamp` (string ISO-8601 UTC) — date d'émission.
-- `messageId` (string UUID v4) — **présent sur les commandes et les messages
-  de mission** (cmd/\*, mission/\*). Permet l'idempotence : un consommateur
-  qui revoit un `messageId` déjà traité l'ignore. Absent sur la télémétrie
-  haute fréquence (on garde le message léger).
+- `messageId` (string UUID v4) — **présent sur les messages d'événement** :
+  `cmd/*`, `mission/ack`, `mission/result`. Permet l'idempotence : un
+  consommateur qui revoit un `messageId` déjà traité l'ignore.
+  **Absent des topics d'état** (`telemetry/*`, `status`, `mission/status`,
+  `connection`) : ce sont des états `retained` qu'on écrase, pas des
+  événements à dédoublonner — `messageId` y serait inutile.
 
 Un message malformé (JSON invalide, `schemaVersion` inconnue, champ requis
 manquant) est **loggé puis ignoré** — jamais de crash.
@@ -284,7 +286,28 @@ connexion TCP du robot tombe sans déconnexion propre.
 |---|---|---|---|
 | 0 | au plus une fois | `telemetry/position` | Haute fréquence ; perdre une frame est sans conséquence, l'état suivant arrive tout de suite. |
 | 1 | au moins une fois | `status`, `battery`, `mission/ack`, `mission/status`, `connection` | Doit arriver ; un doublon est inoffensif (état idempotent). |
-| 2 | exactement une fois | `cmd/*`, `mission/result` | Ni perte ni doublon : ne jamais rater « démarrer mission » ni la déclencher deux fois. |
+| 2 | exactement une fois | `cmd/*`, `mission/result` | Ni perte ni doublon **pour un client connecté** : ne jamais rater « démarrer mission » ni la déclencher deux fois. |
+
+### Livraison et déconnexions
+
+⚠️ La QoS 2 garantit l'exactly-once **uniquement vers un abonné connecté**.
+Une commande (`cmd/*`) n'est pas `retained` : si le robot est hors ligne au
+moment de la publication, le message est perdu — sauf disposition explicite.
+Deux mesures, complémentaires :
+
+1. **Session persistante côté robot** — le bridge se connecte avec
+   `clean_session=false` (MQTT v3.1.1) ou `session expiry > 0` (MQTT v5). Le
+   broker conserve alors la souscription `cmd/#` et **met en file les messages
+   QoS 1/2** adressés au robot pendant une déconnexion courte, puis les délivre
+   à la reconnexion.
+2. **Vérification de présence côté backend** — avant de publier une commande,
+   le backend vérifie que `connection.online` du robot est `true`. Si le robot
+   est hors ligne depuis longtemps, on **refuse** la commande au niveau métier
+   plutôt que de lui livrer un « démarrer mission » périmé à son retour.
+
+La (1) absorbe les micro-coupures, la (2) évite les commandes périmées sur les
+longues pannes. La garantie QoS 2 n'est donc pas « zéro perte absolue » mais
+« zéro perte ni doublon une fois la commande effectivement délivrée ».
 
 ### Retained
 
@@ -305,8 +328,19 @@ Les topics d'**événement** ne sont jamais `retained` : `cmd/*`, `mission/ack`,
 - QoS 1, `retained: true`
 
 Si le robot disparaît brutalement (coupure WiFi, crash, batterie vide), le
-broker publie ce testament. Le backend détecte la perte du robot **en moins
-d'une seconde**, sans polling, et passe le robot en `OFFLINE`.
+broker publie ce testament — sans polling côté backend.
+
+**Délai de détection** — il dépend du type de coupure :
+
+- **Déconnexion TCP propre** (arrêt du nœud, `Ctrl-C`) : le broker publie le
+  testament **immédiatement**.
+- **Coupure brutale** (WiFi coupé, plus de batterie) : le broker ne s'en aperçoit
+  qu'au `keepalive` manqué — typiquement après **≈ 1,5 × keepalive**.
+
+Le bridge se connecte donc avec un `keepalive` court : **`keepalive = 10 s`** →
+détection d'une coupure brutale en **~15 s**. Descendre plus bas augmente le
+trafic de `PINGREQ` pour un gain marginal. La cible réaliste est donc « quelques
+secondes pour un arrêt propre, ~15 s pour une coupure brutale » — pas « < 1 s ».
 
 ---
 
@@ -329,14 +363,20 @@ Deux identités : `backend` et `robot-{id}`. ACL (`acl_file`) :
 user backend
 topic readwrite roblaude/#
 
-# Un robot : écrit SOUS son sous-arbre, lit SEULEMENT ses commandes
+# Un robot : écrit SEULEMENT les topics qu'il produit, lit SEULEMENT ses
+# commandes. Il ne doit PAS pouvoir publier sur cmd/# — le backend est la
+# seule autorité de commande.
 user robot-1
-topic write    roblaude/1/#
+topic write    roblaude/1/telemetry/#
+topic write    roblaude/1/mission/#
+topic write    roblaude/1/status
+topic write    roblaude/1/connection
 topic read     roblaude/1/cmd/#
 ```
 
 C'est la frontière de sécurité : un robot compromis ne peut ni piloter un
-autre robot ni lire la télémétrie d'autrui. (TLS `wss://` repoussé à la prod.)
+autre robot, ni s'auto-envoyer des commandes, ni lire la télémétrie d'autrui.
+(TLS `wss://` repoussé à la prod.)
 
 ---
 
@@ -401,8 +441,12 @@ class MqttBridge(Node):
         self.create_subscription(String, "mission/result", self._on_mission_result, 10)
 
         # --- Client MQTT (T4.1.1) ---
+        # clean_session=False : session persistante — le broker met en file les
+        # commandes QoS 1/2 recues pendant une courte deconnexion.
         self.mqtt = mqtt.Client(
-            client_id=f"robot-{self.robot_id}", protocol=mqtt.MQTTv311
+            client_id=f"robot-{self.robot_id}",
+            clean_session=False,
+            protocol=mqtt.MQTTv311,
         )
         user = self.get_parameter("mqtt_user").value
         pwd = self.get_parameter("mqtt_password").value
@@ -422,7 +466,8 @@ class MqttBridge(Node):
 
         # reconnexion auto geree par la boucle paho
         self.mqtt.reconnect_delay_set(min_delay=1, max_delay=30)
-        self.mqtt.connect_async(host, port, keepalive=30)
+        # keepalive court : coupure brutale detectee en ~15 s via le LWT
+        self.mqtt.connect_async(host, port, keepalive=10)
         self.mqtt.loop_start()
         self.get_logger().info(f"Bridge MQTT demarre — broker {host}:{port}")
 

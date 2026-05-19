@@ -8,7 +8,7 @@
 | Durée | 18 semaines — 17 fév → 26 juin 2026 |
 | Organisation | 9 sprints de 2 semaines |
 | Granularité | Mini-tickets de 1-2h avec test obligatoire |
-| Hardware | Yahboom Transbot non arrivé → simulation Gazebo |
+| Hardware | Yahboom ROSMASTER M3 PRO (Jetson Nano) arrivé mars 2026 — dev mixte simulation Gazebo + hardware réel |
 | Zone de confort | Web (React, Node.js) ✅ — ROS2 débutants ⚠️ |
 | Frontend | PWA (React + Vite) |
 
@@ -165,7 +165,7 @@ C'est la phase la plus risquée du projet. On découvre MoveIt2 et la vision par
 
 | Epic | Tickets | Contenu |
 |------|---------|---------|
-| 6.1 MoveIt2 Setup | 5 | Installation, configuration pour le bras du Transbot, premiers mouvements simples, contrôle du gripper, définition de quelques poses de base |
+| 6.1 MoveIt2 Setup | 5 | Installation, configuration pour le bras 6 DOF du ROSMASTER M3 PRO, premiers mouvements simples, contrôle du gripper, définition de quelques poses de base |
 | 6.2 Vision & Détection | 5 | Caméra de profondeur simulée dans Gazebo, détection d'un objet simple par couleur (OpenCV), calcul de la position 3D de l'objet, transformation de coordonnées caméra → robot, objet saisissable dans Gazebo |
 | 6.3 Formation | 2 | Documentation interne MoveIt2, documentation calibration caméra-bras |
 

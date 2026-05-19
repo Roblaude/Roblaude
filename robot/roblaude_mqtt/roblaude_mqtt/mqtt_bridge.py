@@ -162,6 +162,21 @@ class MqttBridge(Node):
     def _on_mission_result(self, msg):  # T4.1.5
         self._publish('mission/result', json.loads(msg.data), qos=2, retain=False)
 
+    # ---------- Arret ----------
+
+    def stop(self):
+        """Arret propre : annonce offline (retained) puis ferme la connexion.
+        Sans ca, seul le Last Will gere la presence — et il ne se declenche
+        pas sur un arret volontaire."""
+        self.mqtt.publish(
+            f'{self.base}/connection',
+            json.dumps({'schemaVersion': SCHEMA_VERSION,
+                        'timestamp': now_iso(), 'online': False}),
+            qos=1, retain=True,
+        )
+        self.mqtt.disconnect()
+        self.mqtt.loop_stop()
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -171,7 +186,7 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
-        node.mqtt.loop_stop()
+        node.stop()
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

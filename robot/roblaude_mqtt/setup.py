@@ -17,7 +17,7 @@ setup(
         (os.path.join('share', package_name, 'config'),
             glob('config/*')),
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'paho-mqtt~=1.6'],
     zip_safe=True,
     maintainer='Wissem',
     maintainer_email='[email protected]',

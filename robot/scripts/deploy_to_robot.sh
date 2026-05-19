@@ -15,7 +15,7 @@ source "$SCRIPT_DIR/find_robot.sh"
 ROBOT_USER="${ROBOT_USER:-jetson}"
 ROBOT_PASS="${ROBOT_PASS:-yahboom}"
 DEST_DIR="${DEST_DIR:-/home/jetson/launch}"
-CONTAINER="${CONTAINER:-angry_ptolemy}"
+CONTAINER="${CONTAINER:-m3pro_main}"
 CONTAINER_DEST="${CONTAINER_DEST:-/root/launch}"
 
 # Auto-detect robot par MAC
@@ -23,9 +23,9 @@ if ! find_robot; then
     exit 1
 fi
 
-LOCAL_DIR="$(cd "$SCRIPT_DIR/../robot_stack/launch" && pwd)"
+LOCAL_DIR="$(cd "$SCRIPT_DIR/../roblaude_nav/launch" && pwd)"
 
-echo "=== Deploy robot_stack/launch/ vers $ROBOT_USER@$ROBOT_IP:$DEST_DIR ==="
+echo "=== Deploy roblaude_nav/launch/ vers $ROBOT_USER@$ROBOT_IP:$DEST_DIR ==="
 echo "Source : $LOCAL_DIR"
 echo ""
 

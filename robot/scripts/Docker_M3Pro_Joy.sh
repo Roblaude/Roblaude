@@ -10,7 +10,7 @@
 # (ex: /root/launch/, /root/scan_restamper.py, /root/odom_to_tf.py).
 
 CONTAINER_NAME="m3pro_main"
-IMAGE="192.168.2.51.5000/rosmaster-m3pro-nano:1.1.0"
+IMAGE="192.168.2.51:5000/rosmaster-m3pro-nano:1.1.0"
 
 # 1) Attend le demon Docker
 while true; do

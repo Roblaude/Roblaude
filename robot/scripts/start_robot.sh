@@ -85,7 +85,7 @@ done
 if [ -z "${NO_START:-}" ]; then
     echo ""
     echo "▶ Etape 4/5 : Lancement stack ROS2 (start_all.sh)"
-    ssh_cmd "docker exec $CONTAINER bash /root/start_all.sh" 2>&1 | sed 's/^/   /'
+    ssh_cmd "docker exec $CONTAINER bash /root/roblaude_ws/src/robot/scripts/start_all.sh" 2>&1 | sed 's/^/   /'
 
     echo ""
     echo "   ⏳ Attente 10s stabilisation..."

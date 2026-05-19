@@ -74,13 +74,13 @@ export function NewMissionPage() {
 
     setSubmitting(true)
     try {
-      await createMission({
+      const mission = await createMission({
         type,
         fromPointId: Number(fromPointId),
         toPointId: Number(toPointId),
         ...(robotId !== '' ? { robotId: Number(robotId) } : {}),
       })
-      navigate('/missions')
+      navigate(`/missions/${mission.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur lors de la creation')
     } finally {

@@ -42,7 +42,8 @@ interface MissionStore {
   total: number
   filters: MissionFilters
   setFilters: (filters: Partial<MissionFilters>) => void
-  fetchMissions: () => Promise<void>
+  // override : filtres ponctuels non persistes (ex: dashboard = stats globales)
+  fetchMissions: (override?: Partial<MissionFilters>) => Promise<void>
   createMission: (data: { type: MissionType; fromPointId: number; toPointId: number; robotId?: number }) => Promise<Mission>
   cancelMission: (id: number) => Promise<void>
   setCurrentMission: (mission: Mission | null) => void
@@ -59,10 +60,10 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
   setFilters: (filters) =>
     set((s) => ({ filters: { ...s.filters, ...filters } })),
 
-  fetchMissions: async () => {
+  fetchMissions: async (override) => {
     set({ loading: true, error: null })
     try {
-      const { filters } = get()
+      const filters = { ...get().filters, ...override }
       const params = new URLSearchParams()
       if (filters.status) params.set('status', filters.status)
       if (filters.type) params.set('type', filters.type)

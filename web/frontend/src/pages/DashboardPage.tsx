@@ -53,7 +53,8 @@ export function DashboardPage() {
   // poll robot status + missions
   useEffect(() => {
     fetchStatus()
-    fetchMissions()
+    // stats globales : on ignore les filtres de la page Missions
+    fetchMissions({ status: undefined, type: undefined, page: 1 })
     const id = setInterval(fetchStatus, 5000)
     return () => clearInterval(id)
   }, [fetchStatus, fetchMissions])

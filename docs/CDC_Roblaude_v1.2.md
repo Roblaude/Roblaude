@@ -38,9 +38,9 @@ L'utilisateur pilote le tout depuis une interface web accessible, pensée pour l
 
 Il y a plusieurs choses qu'on ne sait pas encore à ce stade et qu'il faut garder en tête en lisant ce document :
 
-- **Le hardware n'est pas arrivé.** On ne connaît pas encore les limites réelles du robot, de son bras, de son LiDAR. Tout ce qui touche au robot dans ce CDC est basé sur la documentation du Yahboom Transbot et devra être validé à la réception.
+- **Le hardware est arrivé (mars 2026) : Yahboom ROSMASTER M3 PRO.** On ne connaît pas encore toutes les limites réelles du robot, de son bras, de son LiDAR, mais on peut maintenant les mesurer pendant les sprints. Tout ce qui touche au robot dans ce CDC est basé sur la documentation du ROSMASTER M3 PRO (modèle Jetson Nano) et est validé au fur et à mesure.
 - **On débute en ROS2.** Les choix techniques côté robot (topics, nœuds, architecture) seront affinés au fur et à mesure de notre apprentissage. Ce CDC décrit les fonctionnalités visées, pas l'implémentation robot finale.
-- **La saisie d'objet est le point le plus incertain.** On ne sait pas encore si le bras du Transbot sera capable de saisir des objets de manière fiable. C'est un risque identifié et on a prévu des fallbacks.
+- **La saisie d'objet est le point le plus incertain.** On ne sait pas encore si le bras 6 DOF du ROSMASTER M3 PRO sera capable de saisir des objets de manière fiable. C'est un risque identifié et on a prévu des fallbacks.
 
 Ce CDC décrit donc ce qu'on veut construire et les grandes lignes de comment on compte s'y prendre. Les détails d'implémentation seront documentés au fil des sprints dans la documentation technique.
 
@@ -106,9 +106,19 @@ Ces choix sont basés sur la documentation officielle et les tutoriels ROS2. On 
 
 ### 3.4 Hardware cible
 
-On vise le Yahboom Transbot : Jetson Nano, roues mecanum, LiDAR 2D, caméra Intel RealSense D435, bras 4 DOF avec gripper. Tout ça communique en WiFi sur le réseau local.
+Robot : **Yahboom ROSMASTER M3 PRO** (version Jetson Nano). Caractéristiques :
 
-Le hardware n'est pas arrivé. Tout le développement commence en simulation Gazebo. L'architecture est pensée pour que la migration vers le hardware réel soit la plus simple possible, mais on s'attend à des ajustements.
+- **Calculateur** : NVIDIA Jetson Nano B01 (4 Go RAM, ARM64, JetPack 4.6 / Ubuntu 18.04 d'origine — cible ROS 2 Humble via conteneurs Docker `dustynv/ros:humble`)
+- **Châssis** : 4 roues mecanum (déplacement omnidirectionnel)
+- **LiDAR** : YDLidar 2D (portée ~8 m, 360°)
+- **Caméra** : Astra Pro RGB-D (profondeur) ou équivalent USB HD
+- **Bras** : 6 DOF avec gripper (modèle PRO MAX)
+- **Contrôleur bas niveau** : carte STM32 pilotée via UART par la lib Python officielle Yahboom `Rosmaster_Lib`
+- **Commande** : manette 2.4 GHz avec dongle USB (fournie)
+- **Connectivité** : WiFi 2.4/5 GHz, SSH, ROS 2 DDS sur le LAN
+- **Alimentation** : batterie Li-Ion intégrée (autonomie ~2 h)
+
+L'architecture reste pensée pour que le développement en simulation Gazebo et le hardware réel partagent un maximum de code. Les premiers tests hardware démarrent au Sprint 1 (mars 2026).
 
 ### 3.5 Tests
 

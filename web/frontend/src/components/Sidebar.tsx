@@ -1,73 +1,138 @@
 import { NavLink } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
+import { useRobotStore } from '../stores/robotStore'
 import { StopButton } from './StopButton'
+import {
+  LayoutDashboard,
+  ListChecks,
+  Plus,
+  Settings2,
+  User,
+  LogOut,
+} from 'lucide-react'
 
 const NAV_ITEMS = [
-  { to: '/', label: 'Dashboard', icon: '⊞' },
-  { to: '/missions', label: 'Missions', icon: '📋' },
-  { to: '/missions/new', label: 'Nouvelle mission', icon: '＋' },
-  { to: '/admin', label: 'Admin', icon: '⚙' },
-  { to: '/profile', label: 'Profil', icon: '👤' },
+  { to: '/', label: 'Dashboard', code: '01', Icon: LayoutDashboard },
+  { to: '/missions', label: 'Missions', code: '02', Icon: ListChecks },
+  { to: '/missions/new', label: 'Nouvelle mission', code: '03', Icon: Plus },
+  { to: '/admin', label: 'Admin', code: '04', Icon: Settings2 },
+  { to: '/profile', label: 'Profil', code: '05', Icon: User },
 ]
 
 export function Sidebar() {
   const { user, logout } = useAuthStore()
+  const { connected, status } = useRobotStore()
 
   return (
     <aside
       aria-label="Navigation principale"
-      className="hidden lg:flex flex-col fixed inset-y-0 left-0 w-60
-                 bg-gray-900 text-gray-100 border-r border-gray-800 z-30"
+      className="hidden lg:flex flex-col fixed inset-y-0 left-0 w-64
+                 bg-card/40 backdrop-blur-sm border-r border-border z-30"
     >
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-800">
-        <span className="text-2xl">🤖</span>
-        <span className="text-lg font-semibold tracking-tight">RobLaude</span>
+      {/* Logo / Header */}
+      <div className="flex items-center gap-2.5 px-5 py-5 border-b border-border">
+        <div className="relative size-8 rounded-sm border border-primary/40 bg-primary/10 flex items-center justify-center">
+          <span className="font-mono text-primary text-[15px] font-bold leading-none">R</span>
+          <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-primary animate-pulse" />
+        </div>
+        <div className="flex flex-col leading-none">
+          <span className="font-mono text-[14px] font-semibold tracking-tight text-foreground">
+            ROBLAUDE
+          </span>
+          <span className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground">
+            Control // Terminal
+          </span>
+        </div>
+      </div>
+
+      {/* Statut robot compact */}
+      <div className="px-5 py-3 border-b border-border">
+        <div className="flex items-center justify-between">
+          <span className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground">
+            · Robot
+          </span>
+          <span
+            className={`inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-widest
+                        ${connected ? 'text-emerald-400' : 'text-destructive'}`}
+          >
+            <span
+              className={`size-1.5 rounded-full ${
+                connected ? 'bg-emerald-500 status-pulse' : 'bg-destructive'
+              }`}
+            />
+            {connected ? status : 'Hors-ligne'}
+          </span>
+        </div>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {NAV_ITEMS.map(({ to, label, icon }) => (
+      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        {NAV_ITEMS.map(({ to, label, code, Icon }) => (
           <NavLink
             key={to}
             to={to}
             end={to === '/'}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
-               ${isActive
-                 ? 'bg-violet-600 text-white'
-                 : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+              `group relative flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm transition-colors
+               ${
+                 isActive
+                   ? 'bg-primary/10 text-primary'
+                   : 'text-muted-foreground hover:bg-card hover:text-foreground'
                }`
             }
           >
-            <span aria-hidden="true">{icon}</span>
-            {label}
+            {({ isActive }) => (
+              <>
+                {/* barre active à gauche */}
+                <span
+                  className={`absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r
+                              ${isActive ? 'bg-primary' : 'bg-transparent'}`}
+                  aria-hidden
+                />
+                <span
+                  className={`font-mono text-[10px] ${
+                    isActive ? 'text-primary/80' : 'text-muted-foreground/60'
+                  }`}
+                >
+                  {code}
+                </span>
+                <Icon className="size-4 shrink-0" aria-hidden />
+                <span className="font-medium">{label}</span>
+              </>
+            )}
           </NavLink>
         ))}
       </nav>
 
       {/* Footer */}
-      <div className="px-4 py-4 border-t border-gray-800 space-y-3">
+      <div className="px-4 py-4 border-t border-border space-y-3">
         <StopButton />
 
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-sm font-bold">
-            {user?.name?.[0]?.toUpperCase() ?? '?'}
+        <div className="flex items-center gap-2.5 pt-1">
+          <div className="size-8 rounded-sm border border-primary/40 bg-primary/10 flex items-center justify-center">
+            <span className="font-mono text-primary text-sm font-semibold">
+              {user?.name?.[0]?.toUpperCase() ?? '?'}
+            </span>
           </div>
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-white truncate">{user?.name ?? 'Invité'}</p>
-            <p className="text-xs text-gray-500 truncate">{user?.role ?? '—'}</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-foreground truncate">
+              {user?.name ?? 'Invité'}
+            </p>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground truncate">
+              {user?.role ?? '—'}
+            </p>
           </div>
+          {user && (
+            <button
+              onClick={logout}
+              aria-label="Déconnexion"
+              className="size-7 flex items-center justify-center rounded-sm text-muted-foreground
+                         hover:bg-destructive/10 hover:text-destructive transition-colors"
+            >
+              <LogOut className="size-3.5" />
+            </button>
+          )}
         </div>
-
-        {user && (
-          <button
-            onClick={logout}
-            className="w-full text-left text-xs text-gray-500 hover:text-red-400 transition-colors"
-          >
-            Déconnexion
-          </button>
-        )}
       </div>
     </aside>
   )

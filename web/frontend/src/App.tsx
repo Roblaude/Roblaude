@@ -8,8 +8,10 @@ import { AdminPage } from './pages/AdminPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
+import { useAuthStore } from './stores/authStore'
 
 export default function App() {
+  const role = useAuthStore((s) => s.user?.role)
   return (
     <BrowserRouter>
       <Routes>
@@ -23,7 +25,10 @@ export default function App() {
           <Route path="/missions" element={<MissionsPage />} />
           <Route path="/missions/new" element={<NewMissionPage />} />
           <Route path="/missions/:id" element={<MissionDetailPage />} />
-          <Route path="/admin" element={<AdminPage />} />
+          <Route
+            path="/admin"
+            element={role === 'ADMIN' ? <AdminPage /> : <Navigate to="/" replace />}
+          />
           <Route path="/profile" element={<ProfilePage />} />
         </Route>
 

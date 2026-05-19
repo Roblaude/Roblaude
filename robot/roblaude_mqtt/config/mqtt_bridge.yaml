@@ -1,0 +1,9 @@
+# Parametres du noeud mqtt_bridge. Surchargeable au lancement :
+#   ros2 launch roblaude_mqtt mqtt_bridge.launch.py broker_host:=192.168.1.50
+mqtt_bridge:
+  ros__parameters:
+    broker_host: "localhost"   # hote du broker Mosquitto
+    broker_port: 1883
+    robot_id: 1                # = Robot.id en base — definit roblaude/{robotId}/...
+    mqtt_user: ""              # identite pour l'ACL du broker, ex. robot-1
+    mqtt_password: ""          # TODO: injecter via secret, jamais en clair ici

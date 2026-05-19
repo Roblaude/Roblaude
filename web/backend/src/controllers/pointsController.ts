@@ -1,4 +1,5 @@
 import { Request, Response } from 'express'
+import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import prisma from '../lib/prisma'
 
@@ -94,7 +95,9 @@ export async function updatePoint(req: Request, res: Response) {
 
 /**
  * DELETE /api/points/:id (admin only)
- * Supprime un point. Refuse si des missions actives y sont liees.
+ * Supprime un point. Refuse si des missions (meme terminees) y sont liees :
+ * la cle etrangere Mission.fromPointId/toPointId l'interdit et on conserve
+ * l'integrite de l'historique des missions.
  */
 export async function deletePoint(req: Request, res: Response) {
   const id = parseInt(req.params.id, 10)
@@ -103,24 +106,38 @@ export async function deletePoint(req: Request, res: Response) {
     return
   }
 
-  // Verifier qu'aucune mission active n'est liee
-  const activeMissions = await prisma.mission.count({
-    where: {
-      OR: [{ fromPointId: id }, { toPointId: id }],
-      status: {
-        notIn: ['COMPLETED', 'CANCELLED', 'FAILED'],
-      },
-    },
+  // Compter TOUTES les missions liees (pas seulement les actives) : une
+  // mission terminee reference toujours le point via une cle etrangere,
+  // donc la suppression echouerait avec une erreur de contrainte.
+  const linkedMissions = await prisma.mission.count({
+    where: { OR: [{ fromPointId: id }, { toPointId: id }] },
   })
 
-  if (activeMissions > 0) {
+  if (linkedMissions > 0) {
     res.status(400).json({
-      error: 'Impossible de supprimer : des missions actives sont liees a ce point',
-      activeMissions,
+      error: 'Impossible de supprimer : ce point est lie a des missions (historique compris)',
+      linkedMissions,
     })
     return
   }
 
-  await prisma.point.delete({ where: { id } })
-  res.status(204).send()
+  try {
+    await prisma.point.delete({ where: { id } })
+    res.status(204).send()
+  } catch (e) {
+    // Filet de securite : autre contrainte (objets lies) ou point absent
+    if (e instanceof Prisma.PrismaClientKnownRequestError) {
+      if (e.code === 'P2003') {
+        res.status(400).json({
+          error: 'Ce point est reference ailleurs et ne peut pas etre supprime',
+        })
+        return
+      }
+      if (e.code === 'P2025') {
+        res.status(404).json({ error: 'Point introuvable' })
+        return
+      }
+    }
+    throw e
+  }
 }

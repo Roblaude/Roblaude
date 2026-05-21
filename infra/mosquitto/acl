@@ -10,12 +10,11 @@ topic readwrite roblaude/#
 
 # Robot 1 — modele a dupliquer pour chaque robot ajoute
 user robot-1
-# Le robot publie sa telemetrie et son etat
+# Le robot publie sa telemetrie, son etat, sa presence, et toutes les
+# reponses mission (ack/status/result + futurs sous-topics) — spec §7
 topic write roblaude/1/telemetry/#
 topic write roblaude/1/status
 topic write roblaude/1/connection
-topic write roblaude/1/mission/ack
-topic write roblaude/1/mission/status
-topic write roblaude/1/mission/result
+topic write roblaude/1/mission/#
 # Le robot lit les commandes du backend
 topic read roblaude/1/cmd/#

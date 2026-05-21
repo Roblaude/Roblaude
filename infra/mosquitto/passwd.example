@@ -1,14 +1,15 @@
-# Format Mosquitto passwd (apres `mosquitto_passwd -U`) : user:hash_bcrypt
-# Genere avec :
+# Format Mosquitto passwd : user:hash_pbkdf2_sha512
+# Generation locale (jamais commit le vrai fichier passwd) :
 #   touch infra/mosquitto/passwd
 #   docker run --rm -v $(pwd)/infra/mosquitto:/m eclipse-mosquitto:2 \
-#       mosquitto_passwd -b /m/passwd backend backend-CHANGE-ME
+#       mosquitto_passwd -b -H sha512 /m/passwd backend backend-CHANGE-ME
 #   docker run --rm -v $(pwd)/infra/mosquitto:/m eclipse-mosquitto:2 \
-#       mosquitto_passwd -b /m/passwd robot-1 robot1-CHANGE-ME
+#       mosquitto_passwd -b -H sha512 /m/passwd robot-1 robot1-CHANGE-ME
 #
-# Le fichier passwd reel est gitignored. Ne commit JAMAIS les vrais hashes
-# ni les mots de passe en clair.
+# Format reel d'une ligne (mosquitto v2 sha512-pbkdf2) :
+#   <user>:$7$<iterations>$<base64-salt>$<base64-hash>
+# Le fichier passwd reel est gitignored (.gitignore l'exclut).
 
-# Exemple de structure (hashes factices) :
-backend:$7$101$fakebackendhash$fakefakefakefake
-robot-1:$7$101$fakerobot1hash$fakefakefakefake
+# Squelette factice — ne PAS utiliser ces hashes, regenere-les localement :
+backend:$7$101$AAAAAAAAAAAAAAAA$BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+robot-1:$7$101$CCCCCCCCCCCCCCCC$DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD

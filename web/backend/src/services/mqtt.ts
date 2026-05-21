@@ -68,11 +68,12 @@ const positionSchema = z.object({
 })
 
 // status — le robot publie son etat applicatif (spec §5.3).
-// OFFLINE n'est pas publie par le robot lui-meme : c'est deduit du Last Will
-// sur le topic connection (cf. handleConnection).
+// On accepte tous les RobotStatus Prisma — y compris OFFLINE au cas ou le
+// robot voudrait l'annoncer explicitement (sinon c'est deduit du Last Will
+// sur connection, cf. handleConnection).
 const statusSchema = z.object({
   timestamp: z.string().datetime({ offset: true }),
-  state: z.enum(['AVAILABLE', 'BUSY', 'ERROR']),
+  state: z.nativeEnum(RobotStatus),
 })
 
 // connection (spec §5.5) — Last Will retained, online:false a la coupure
@@ -101,6 +102,11 @@ class RobotMqttAdapter {
   // Map<messageId, expireAt>. TTL pour eviter fuite memoire sur long uptime
   // (bug Copilot #218 — la demo soutenance tournera 8h).
   private seenMessageIds = new Map<string, number>()
+
+  /** Vide le cache d'idempotence — utile pour les tests. */
+  resetSeenMessageIds(): void {
+    this.seenMessageIds.clear()
+  }
 
   /** Purge les messageIds expires. Appele a chaque add. */
   private purgeExpiredMessageIds(now: number = Date.now()): void {
@@ -167,20 +173,31 @@ class RobotMqttAdapter {
    * Backend -> Robot. Publie sur roblaude/{robotId}/cmd/{action} en QoS 2.
    * L'enveloppe (schemaVersion, messageId, timestamp) est ajoutee ici.
    */
-  publishCommand(robotId: number, action: CmdAction, body: object): void {
-    if (!this.client) throw new Error('[mqtt] adaptateur non connecte')
-
+  publishCommand(robotId: number, action: CmdAction, body: object): boolean {
+    // Retourne true si le publish a ete envoye, false si pas connecte ou
+    // si une erreur survient. Le controller decide s'il rollback ou non
+    // (en pratique on ne rollback pas — on a deja committe en DB).
+    if (!this.client) {
+      console.warn('[mqtt] publishCommand : adaptateur non connecte')
+      return false
+    }
     const message = {
       schemaVersion: SCHEMA_VERSION,
       messageId: randomUUID(),
       timestamp: new Date().toISOString(),
       ...body,
     }
-    this.client.publish(
-      `roblaude/${robotId}/cmd/${action}`,
-      JSON.stringify(message),
-      { qos: 2, retain: false },
-    )
+    try {
+      this.client.publish(
+        `roblaude/${robotId}/cmd/${action}`,
+        JSON.stringify(message),
+        { qos: 2, retain: false },
+      )
+      return true
+    } catch (err) {
+      console.error('[mqtt] publishCommand erreur :', err instanceof Error ? err.message : err)
+      return false
+    }
   }
 
   /** Robot -> Backend. Parse l'enveloppe puis route vers le bon traitement. */

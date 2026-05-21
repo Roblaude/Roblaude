@@ -12,11 +12,11 @@ touch infra/mosquitto/passwd
 
 # Backend — broker
 docker run --rm -v $(pwd)/infra/mosquitto:/m eclipse-mosquitto:2 \
-    mosquitto_passwd -b /m/passwd backend backend-CHANGE-ME
+    mosquitto_passwd -b -H sha512 /m/passwd backend backend-CHANGE-ME
 
 # Robot 1 — broker
 docker run --rm -v $(pwd)/infra/mosquitto:/m eclipse-mosquitto:2 \
-    mosquitto_passwd -b /m/passwd robot-1 robot1-CHANGE-ME
+    mosquitto_passwd -b -H sha512 /m/passwd robot-1 robot1-CHANGE-ME
 ```
 
 Remplacer `*-CHANGE-ME` par des mots de passe forts. Reporter ces
@@ -39,7 +39,7 @@ Pour chaque nouveau robot, créer un user dédié et étendre l'ACL :
 
 ```bash
 docker run --rm -v $(pwd)/infra/mosquitto:/m eclipse-mosquitto:2 \
-    mosquitto_passwd -b /m/passwd robot-2 robot2-pwd
+    mosquitto_passwd -b -H sha512 /m/passwd robot-2 robot2-pwd
 ```
 
 Puis ajouter dans `infra/mosquitto/acl` :

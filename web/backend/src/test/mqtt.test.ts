@@ -50,12 +50,11 @@ describe('RobotMqttAdapter — transport', () => {
   beforeEach(() => {
     fakeClient.publish.mockClear()
     fakeClient.subscribe.mockClear()
-    robotMqtt.disconnect()
+    robotMqtt.disconnect(); robotMqtt.resetSeenMessageIds()
   })
 
-  it('publishCommand throw si pas connecte', () => {
-    expect(() => robotMqtt.publishCommand(1, 'mission', { missionId: 42 }))
-      .toThrow(/non connecte/)
+  it('publishCommand retourne false si pas connecte', () => {
+    expect(robotMqtt.publishCommand(1, 'mission', { missionId: 42 })).toBe(false)
   })
 
   it('s abonne aux topics robot a la connexion', () => {
@@ -101,7 +100,7 @@ describe('RobotMqttAdapter — transport', () => {
 describe('RobotMqttAdapter — handlers mission/ack & mission/status', () => {
   beforeEach(() => {
     prismaMock.mission.update.mockClear()
-    robotMqtt.disconnect()
+    robotMqtt.disconnect(); robotMqtt.resetSeenMessageIds()
     robotMqtt.connect()
   })
 
@@ -216,7 +215,7 @@ describe('RobotMqttAdapter — handlers mission/result', () => {
     prismaMock.mission.update.mockClear()
     prismaMock.robot.update.mockClear()
     prismaMock.$transaction.mockClear()
-    robotMqtt.disconnect()
+    robotMqtt.disconnect(); robotMqtt.resetSeenMessageIds()
     robotMqtt.connect()
   })
 
@@ -323,7 +322,7 @@ describe('RobotMqttAdapter — handlers telemetry/battery, status, connection (T
   beforeEach(() => {
     prismaMock.robot.update.mockClear()
     prismaMock.robot.updateMany.mockClear()
-    robotMqtt.disconnect()
+    robotMqtt.disconnect(); robotMqtt.resetSeenMessageIds()
     robotMqtt.connect()
   })
 

@@ -162,12 +162,15 @@ export async function createMission(req: Request, res: Response) {
 
   // T4.2.2 — publie cmd/mission au robot si un robotId est present. Sans
   // robotId, la mission reste PENDING ; un assignment ulterieur publiera.
+  // Payload conforme spec MQTT §5.1 (theta obligatoire dans les points,
+  // objectId nullable pour TRANSPORT).
   if (mission.robotId) {
     robotMqtt.publishCommand(mission.robotId, 'mission', {
       missionId: mission.id,
       type: mission.type,
-      fromPoint: { x: fromPoint.x, y: fromPoint.y, slug: fromPoint.slug },
-      toPoint: { x: toPoint.x, y: toPoint.y, slug: toPoint.slug },
+      fromPoint: { x: fromPoint.x, y: fromPoint.y, theta: fromPoint.theta, slug: fromPoint.slug },
+      toPoint: { x: toPoint.x, y: toPoint.y, theta: toPoint.theta, slug: toPoint.slug },
+      objectId: mission.objectId,
     })
   }
 
@@ -356,10 +359,9 @@ export async function stopMission(req: Request, res: Response) {
     return cancelled
   })
 
-  robotMqtt.publishCommand(mission.robotId, 'emergency-stop', {
-    missionId: id,
-    reason,
-  })
+  // emergency-stop est GLOBAL (spec §5.1 — pas de missionId, le robot arrete
+  // ce qu'il fait quoi qu'il arrive). On garde reason pour traçabilité.
+  robotMqtt.publishCommand(mission.robotId, 'emergency-stop', { reason })
 
   res.json({ data: updated })
 }

@@ -13,7 +13,7 @@
 # Pas de watchdog/respawn ici (cf. retour d'experience prof : runaway bash a
 # load avg 400+). Si un node meurt, on regarde son log et on `docker exec`.
 
-set -u
+# Pas de set -u : /opt/ros/humble/setup.bash plante dessus (AMENT_TRACE_SETUP_FILES)
 
 ROBLAUDE_WS="${ROBLAUDE_WS:-/root/roblaude_ws}"
 YAHBOOM_WS="${YAHBOOM_WS:-/root/yahboomcar_ws}"

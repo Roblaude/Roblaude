@@ -14,9 +14,13 @@ from datetime import datetime, timezone
 import paho.mqtt.client as mqtt
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String  # placeholder en attendant T3.2.5 / T3.2.8
+from std_msgs.msg import Float32, String
 
 SCHEMA_VERSION = 1
+
+# Batterie Li-Ion 3S du ROSMASTER M3 PRO : ~10.0 V vide, ~12.6 V plein
+BATTERY_EMPTY_V = 10.0
+BATTERY_FULL_V = 12.6
 
 # Commande MQTT (suffixe topic cmd/<action>) -> topic ROS 2 publie vers le graphe
 CMD_TO_ROS_TOPIC = {
@@ -57,9 +61,15 @@ class MqttBridge(Node):
         }
 
         # --- Subscribers ROS 2 : graphe ROS -> telemetrie/mission MQTT ---
-        # A brancher sur les vrais topics une fois T3.2.5 / T3.2.8 prets.
+        # Position : encore placeholder, sera branchee sur /odom ou /amcl_pose
+        # quand T3.2.8 (publication position) sera prete.
         self.create_subscription(String, 'robot/position', self._on_position, 10)
-        self.create_subscription(String, 'robot/battery', self._on_battery, 10)
+        # Batterie : /battery est le topic Yahboom standard (YB_Node), Float32
+        # = tension en volts. On en deduit le pourcentage cote bridge.
+        self.create_subscription(Float32, '/battery', self._on_battery, 10)
+        # Status : pas de topic Yahboom natif — sera publie par mission_executor
+        # (#59) quand il sera la. En attendant le bridge publie AVAILABLE au
+        # demarrage (cf. _on_mqtt_connect).
         self.create_subscription(String, 'robot/status', self._on_status, 10)
         self.create_subscription(String, 'mission/ack', self._on_mission_ack, 10)
         self.create_subscription(String, 'mission/status', self._on_mission_status, 10)
@@ -111,6 +121,14 @@ class MqttBridge(Node):
                         'timestamp': now_iso(), 'online': True}),
             qos=1, retain=True,
         )
+        # Etat initial : AVAILABLE (retained). Le mission_executor (#59)
+        # ecrasera cette valeur quand une mission demarre / se termine.
+        client.publish(
+            f'{self.base}/status',
+            json.dumps({'schemaVersion': SCHEMA_VERSION,
+                        'timestamp': now_iso(), 'state': 'AVAILABLE'}),
+            qos=1, retain=True,
+        )
         self.get_logger().info('Connecte au broker, abonne a cmd/#')
 
     def _on_mqtt_disconnect(self, _client, _userdata, rc):
@@ -147,8 +165,16 @@ class MqttBridge(Node):
     def _on_position(self, msg):        # T4.1.3
         self._publish('telemetry/position', json.loads(msg.data), qos=0, retain=True)
 
-    def _on_battery(self, msg):         # T4.1.10
-        self._publish('telemetry/battery', json.loads(msg.data), qos=1, retain=True)
+    def _on_battery(self, msg):         # T4.1.10 — /battery (Float32) = tension Yahboom
+        voltage = float(msg.data)
+        # interpolation lineaire — approximative, suffisante pour un % indicatif
+        ratio = (voltage - BATTERY_EMPTY_V) / (BATTERY_FULL_V - BATTERY_EMPTY_V)
+        percent = max(0, min(100, int(ratio * 100)))
+        self._publish('telemetry/battery', {
+            'voltage': round(voltage, 2),
+            'percent': percent,
+            'charging': False,  # Yahboom n'expose pas l'etat de charge
+        }, qos=1, retain=True)
 
     def _on_status(self, msg):          # T4.1.11
         self._publish('status', json.loads(msg.data), qos=1, retain=True)

@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import { MissionStatus, MissionType, RobotStatus } from '@prisma/client'
 import { z } from 'zod'
 import prisma from '../lib/prisma'
+import { robotMqtt } from '../services/mqtt'
 
 // query params pour GET /api/missions
 const listQuerySchema = z.object({
@@ -212,6 +213,50 @@ export async function cancelMission(req: Request, res: Response) {
 
     return cancelled
   })
+
+  res.json({ data: updated })
+}
+
+export async function resumeMission(req: Request, res: Response) {
+  const id = parseInt(req.params.id, 10)
+  if (isNaN(id)) {
+    res.status(400).json({ error: 'ID invalide' })
+    return
+  }
+
+  const mission = await prisma.mission.findUnique({ where: { id } })
+  if (!mission) {
+    res.status(404).json({ error: 'Mission introuvable' })
+    return
+  }
+  if (mission.status !== MissionStatus.PAUSED) {
+    res.status(400).json({ error: 'Mission non reprenable', status: mission.status })
+    return
+  }
+  if (!mission.robotId) {
+    res.status(400).json({ error: 'Aucun robot assigne a la mission' })
+    return
+  }
+
+  // Robot repasse BUSY. Mission.status sera mis a jour par le robot via
+  // mission/status apres reprise (le robot connait son sous-etat reel).
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.robot.update({
+      where: { id: mission.robotId! },
+      data: { status: RobotStatus.BUSY },
+    })
+    return tx.mission.findUnique({
+      where: { id },
+      include: {
+        fromPoint: true,
+        toPoint: true,
+        robot: { select: { id: true, name: true, status: true } },
+        user: { select: { id: true, name: true, email: true } },
+      },
+    })
+  })
+
+  robotMqtt.publishCommand(mission.robotId, 'resume', { missionId: id })
 
   res.json({ data: updated })
 }

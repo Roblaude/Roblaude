@@ -9,15 +9,23 @@ import prisma from '../lib/prisma'
 
 const SCHEMA_VERSION = 1
 
-// Payloads attendus depuis le robot (spec §5.4)
+// Payloads attendus depuis le robot (spec §4 + §5.4)
+// timestamp ISO-8601 obligatoire sur tous les messages.
+// reason obligatoire si rejected/failed (spec §5.4 — Copilot review #218).
+
 const missionAckSchema = z.object({
   messageId: z.string().min(1),
+  timestamp: z.string().datetime(),
   missionId: z.number().int().positive(),
   result: z.enum(['accepted', 'rejected']),
   reason: z.string().optional(),
-})
+}).refine(
+  (d) => d.result !== 'rejected' || (d.reason !== undefined && d.reason.length > 0),
+  { message: 'reason est obligatoire si result === "rejected"', path: ['reason'] },
+)
 
 const missionStatusSchema = z.object({
+  timestamp: z.string().datetime(),
   missionId: z.number().int().positive(),
   state: z.nativeEnum(MissionStatus),
   progress: z.number().min(0).max(1).optional(),
@@ -25,10 +33,14 @@ const missionStatusSchema = z.object({
 
 const missionResultSchema = z.object({
   messageId: z.string().min(1),
+  timestamp: z.string().datetime(),
   missionId: z.number().int().positive(),
   result: z.enum(['completed', 'failed', 'cancelled']),
   reason: z.string().optional(),
-})
+}).refine(
+  (d) => d.result !== 'failed' || (d.reason !== undefined && d.reason.length > 0),
+  { message: 'reason est obligatoire si result === "failed"', path: ['reason'] },
+)
 
 // Mapping result -> MissionStatus Prisma
 const RESULT_TO_STATUS = {
@@ -45,12 +57,49 @@ export type CmdAction =
   | 'loading-confirmed'
   | 'emergency-stop'
 
+// Duree de vie d'un messageId dans le cache d'idempotence. Au-dela, le retry
+// du robot est traite comme un nouveau message. Le robot ne doit pas retry
+// au-dela de cette fenetre (sinon double traitement) — la spec MQTT QoS 2
+// garantit que le broker ne livre pas deux fois en moins de quelques minutes.
+const SEEN_MESSAGE_TTL_MS = 60 * 60 * 1000 // 1 heure
+
 class RobotMqttAdapter {
   private client: MqttClient | null = null
   // messageIds deja traites pour les evenements (cf. spec §4 — idempotence).
-  // In-memory : on perd le set au restart, le robot peut rejouer un ack ; en
-  // pratique l'update Prisma reste idempotent (meme statut ecrit deux fois).
-  private seenMessageIds = new Set<string>()
+  // Map<messageId, expireAt>. TTL pour eviter fuite memoire sur long uptime
+  // (bug Copilot #218 — la demo soutenance tournera 8h).
+  private seenMessageIds = new Map<string, number>()
+
+  /** Purge les messageIds expires. Appele a chaque add. */
+  private purgeExpiredMessageIds(now: number = Date.now()): void {
+    for (const [id, expireAt] of this.seenMessageIds) {
+      if (expireAt <= now) this.seenMessageIds.delete(id)
+    }
+  }
+
+  /**
+   * Execute fn() une seule fois par messageId.
+   * - Marque immediatement (synchrone) pour que deux deliveries concurrentes
+   *   du meme messageId ne lancent pas deux fn() en parallele.
+   * - Si fn() throw, on retire le messageId du cache : un retry du robot pourra
+   *   retenter (sinon un hoquet DB bloquait definitivement — bug Copilot #218).
+   * - Expire apres SEEN_MESSAGE_TTL_MS.
+   */
+  private async withIdempotence(
+    messageId: string,
+    fn: () => Promise<void>,
+  ): Promise<void> {
+    const now = Date.now()
+    this.purgeExpiredMessageIds(now)
+    if (this.seenMessageIds.has(messageId)) return
+    this.seenMessageIds.set(messageId, now + SEEN_MESSAGE_TTL_MS)
+    try {
+      await fn()
+    } catch (err) {
+      this.seenMessageIds.delete(messageId)
+      throw err
+    }
+  }
 
   /** Connexion au broker + abonnement aux topics robot (wildcard multi-robot). */
   connect(): void {
@@ -152,10 +201,7 @@ class RobotMqttAdapter {
       return
     }
     const { messageId, missionId, result, reason } = parsed.data
-    if (this.seenMessageIds.has(messageId)) return
-    this.seenMessageIds.add(messageId)
-
-    try {
+    await this.withIdempotence(messageId, async () => {
       if (result === 'accepted') {
         await prisma.mission.update({
           where: { id: missionId },
@@ -167,10 +213,11 @@ class RobotMqttAdapter {
           data: { status: MissionStatus.FAILED, failureReason: reason ?? 'rejected' },
         })
       }
-    } catch (err) {
+    }).catch((err) => {
+      // L'echec NE marque PAS le messageId comme vu (cf. withIdempotence)
       console.error('[mqtt] update mission/ack :',
         err instanceof Error ? err.message : err)
-    }
+    })
   }
 
   // mission/status — propage le sous-etat courant. Pas de messageId
@@ -202,14 +249,11 @@ class RobotMqttAdapter {
       return
     }
     const { messageId, missionId, result, reason } = parsed.data
-    if (this.seenMessageIds.has(messageId)) return
-    this.seenMessageIds.add(messageId)
-
     const status = RESULT_TO_STATUS[result]
     const missionData: { status: MissionStatus; failureReason?: string } = { status }
     if (result === 'failed') missionData.failureReason = reason ?? 'failed'
 
-    try {
+    await this.withIdempotence(messageId, async () => {
       await prisma.$transaction([
         prisma.mission.update({ where: { id: missionId }, data: missionData }),
         prisma.robot.update({
@@ -217,10 +261,11 @@ class RobotMqttAdapter {
           data: { status: RobotStatus.AVAILABLE },
         }),
       ])
-    } catch (err) {
+    }).catch((err) => {
+      // L'echec NE marque PAS le messageId comme vu (cf. withIdempotence)
       console.error('[mqtt] update mission/result :',
         err instanceof Error ? err.message : err)
-    }
+    })
   }
 
   /** Fermeture propre — a appeler a l'arret du serveur. */

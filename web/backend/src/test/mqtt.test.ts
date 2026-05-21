@@ -33,8 +33,13 @@ vi.mock('../lib/prisma', () => ({ default: prismaMock }))
 import { robotMqtt } from '../services/mqtt'
 
 // Helper : reconstruit un message MQTT comme s'il venait du broker.
+// Ajoute schemaVersion + timestamp par defaut (spec §4 — obligatoires).
 function deliver(topic: string, body: object) {
-  const payload = Buffer.from(JSON.stringify({ schemaVersion: 1, ...body }))
+  const payload = Buffer.from(JSON.stringify({
+    schemaVersion: 1,
+    timestamp: new Date().toISOString(),
+    ...body,
+  }))
   messageHandler!(topic, payload)
 }
 
@@ -124,17 +129,15 @@ describe('RobotMqttAdapter — handlers mission/ack & mission/status', () => {
     })
   })
 
-  it('mission/ack rejected sans reason ecrit "rejected"', async () => {
+  it('mission/ack rejected SANS reason est rejete par le schema (spec §5.4)', async () => {
     deliver('roblaude/3/mission/ack', {
       messageId: 'm-3',
       missionId: 7,
       result: 'rejected',
+      // pas de reason -> doit etre rejete
     })
     await Promise.resolve()
-    expect(prismaMock.mission.update).toHaveBeenCalledWith({
-      where: { id: 7 },
-      data: { status: 'FAILED', failureReason: 'rejected' },
-    })
+    expect(prismaMock.mission.update).not.toHaveBeenCalled()
   })
 
   it('mission/ack ignore les messageId deja vus (idempotence)', async () => {
@@ -143,6 +146,40 @@ describe('RobotMqttAdapter — handlers mission/ack & mission/status', () => {
     deliver('roblaude/3/mission/ack', payload)
     await Promise.resolve()
     expect(prismaMock.mission.update).toHaveBeenCalledTimes(1)
+  })
+
+  it('mission/ack — un messageId expire est re-traite (TTL 1h)', async () => {
+    // On avance Date.now de 2h pour simuler l'expiration
+    const realNow = Date.now
+    Date.now = () => realNow.call(Date)
+
+    const payload = { messageId: 'm-old', missionId: 42, result: 'accepted' as const }
+    deliver('roblaude/3/mission/ack', payload)
+    await Promise.resolve()
+    expect(prismaMock.mission.update).toHaveBeenCalledTimes(1)
+
+    // 2h plus tard, le robot rejoue le meme messageId (cas peu probable mais
+    // notre TTL doit le laisser passer comme un nouveau message)
+    Date.now = () => realNow.call(Date) + 2 * 60 * 60 * 1000
+    deliver('roblaude/3/mission/ack', payload)
+    await Promise.resolve()
+    expect(prismaMock.mission.update).toHaveBeenCalledTimes(2)
+
+    Date.now = realNow
+  })
+
+  it('mission/ack — un echec Prisma ne consomme pas le messageId (retry OK)', async () => {
+    prismaMock.mission.update
+      .mockRejectedValueOnce(new Error('DB transitoire'))
+      .mockResolvedValueOnce({})
+    const payload = { messageId: 'm-retry', missionId: 42, result: 'accepted' as const }
+    deliver('roblaude/3/mission/ack', payload)
+    await Promise.resolve(); await Promise.resolve()
+    expect(prismaMock.mission.update).toHaveBeenCalledTimes(1)
+    // Retry du robot avec le meme messageId apres l'echec — doit reessayer
+    deliver('roblaude/3/mission/ack', payload)
+    await Promise.resolve(); await Promise.resolve()
+    expect(prismaMock.mission.update).toHaveBeenCalledTimes(2)
   })
 
   it('mission/ack malforme est ignore (pas de crash)', async () => {
@@ -215,17 +252,16 @@ describe('RobotMqttAdapter — handlers mission/result', () => {
     })
   })
 
-  it('failed sans reason ecrit "failed" en fallback', async () => {
+  it('mission/result failed SANS reason est rejete par le schema (spec §5.4)', async () => {
     deliver('roblaude/3/mission/result', {
       messageId: 'r-3',
       missionId: 42,
       result: 'failed',
+      // pas de reason -> doit etre rejete
     })
     await Promise.resolve()
-    expect(prismaMock.mission.update).toHaveBeenCalledWith({
-      where: { id: 42 },
-      data: { status: 'FAILED', failureReason: 'failed' },
-    })
+    expect(prismaMock.mission.update).not.toHaveBeenCalled()
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
   })
 
   it('cancelled: mission CANCELLED + robot AVAILABLE', async () => {

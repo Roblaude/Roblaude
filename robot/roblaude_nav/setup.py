@@ -20,7 +20,7 @@ setup(
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='Wissem',
-    maintainer_email='[email protected]',
+    maintainer_email='wissemkarboub@gmail.com',
     description='Navigation autonome RobLaude — SLAM + Nav2 pour le ROSMASTER M3 PRO',
     license='MIT',
     tests_require=['pytest'],

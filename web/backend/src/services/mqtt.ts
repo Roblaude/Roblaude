@@ -1,18 +1,27 @@
 import mqtt, { type MqttClient } from 'mqtt'
 import { randomUUID } from 'node:crypto'
+import { MissionStatus } from '@prisma/client'
+import { z } from 'zod'
+import prisma from '../lib/prisma'
 
-/**
- * Adaptateur MQTT du backend — singleton.
- *
- * Squelette du ticket T4.2.1. La connexion au broker, l'abonnement wildcard
- * et la publication des commandes sont fonctionnels. Le traitement des
- * messages entrants (mise a jour Prisma + relai WebSocket) reste a faire
- * dans les tickets T4.2.3, T4.2.4, T4.2.5 et T4.2.9.
- *
- * Topics et formats : voir docs/mqtt-spec.md
- */
+// Adaptateur MQTT du backend — singleton.
+// Topics et formats : voir docs/mqtt-spec.md
 
 const SCHEMA_VERSION = 1
+
+// Payloads attendus depuis le robot (spec §5.4)
+const missionAckSchema = z.object({
+  messageId: z.string().min(1),
+  missionId: z.number().int().positive(),
+  result: z.enum(['accepted', 'rejected']),
+  reason: z.string().optional(),
+})
+
+const missionStatusSchema = z.object({
+  missionId: z.number().int().positive(),
+  state: z.nativeEnum(MissionStatus),
+  progress: z.number().min(0).max(1).optional(),
+})
 
 /** Actions publiables sur roblaude/{robotId}/cmd/{action}. */
 export type CmdAction =
@@ -24,6 +33,10 @@ export type CmdAction =
 
 class RobotMqttAdapter {
   private client: MqttClient | null = null
+  // messageIds deja traites pour les evenements (cf. spec §4 — idempotence).
+  // In-memory : on perd le set au restart, le robot peut rejouer un ack ; en
+  // pratique l'update Prisma reste idempotent (meme statut ecrit deux fois).
+  private seenMessageIds = new Set<string>()
 
   /** Connexion au broker + abonnement aux topics robot (wildcard multi-robot). */
   connect(): void {
@@ -103,7 +116,8 @@ class RobotMqttAdapter {
         // TODO #202 : mettre a jour Robot.status + relai status_change
         break
       case 'mission':
-        // TODO #79 : sub === 'ack' | 'status' -> Mission.status
+        if (sub === 'ack') void this.handleMissionAck(robotId, data)
+        else if (sub === 'status') void this.handleMissionStatus(data)
         // TODO #81 : sub === 'result' -> COMPLETED/FAILED/CANCELLED + failureReason
         break
       case 'connection':
@@ -112,10 +126,57 @@ class RobotMqttAdapter {
       default:
         console.warn(`[mqtt] famille de topic inconnue : ${family}`)
     }
+  }
 
-    // Reference robotId/sub en attendant les TODO ci-dessus (evite le bruit lint).
-    void robotId
-    void sub
+  // mission/ack — accepted: on attache le robot a la mission.
+  //               rejected: status = FAILED + failureReason.
+  // L'idempotence repose sur messageId (cf. spec §4).
+  private async handleMissionAck(robotId: number, data: Record<string, unknown>) {
+    const parsed = missionAckSchema.safeParse(data)
+    if (!parsed.success) {
+      console.warn('[mqtt] mission/ack rejete :', parsed.error.issues)
+      return
+    }
+    const { messageId, missionId, result, reason } = parsed.data
+    if (this.seenMessageIds.has(messageId)) return
+    this.seenMessageIds.add(messageId)
+
+    try {
+      if (result === 'accepted') {
+        await prisma.mission.update({
+          where: { id: missionId },
+          data: { robotId },
+        })
+      } else {
+        await prisma.mission.update({
+          where: { id: missionId },
+          data: { status: MissionStatus.FAILED, failureReason: reason ?? 'rejected' },
+        })
+      }
+    } catch (err) {
+      console.error('[mqtt] update mission/ack :',
+        err instanceof Error ? err.message : err)
+    }
+  }
+
+  // mission/status — propage le sous-etat courant. Pas de messageId
+  // (etat retained, on ecrase, pas besoin de dedoublonner).
+  private async handleMissionStatus(data: Record<string, unknown>) {
+    const parsed = missionStatusSchema.safeParse(data)
+    if (!parsed.success) {
+      console.warn('[mqtt] mission/status rejete :', parsed.error.issues)
+      return
+    }
+    const { missionId, state } = parsed.data
+    try {
+      await prisma.mission.update({
+        where: { id: missionId },
+        data: { status: state },
+      })
+    } catch (err) {
+      console.error('[mqtt] update mission/status :',
+        err instanceof Error ? err.message : err)
+    }
   }
 
   /** Fermeture propre — a appeler a l'arret du serveur. */

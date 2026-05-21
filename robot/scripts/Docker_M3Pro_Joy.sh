@@ -1,52 +1,64 @@
 #!/bin/bash
-# Docker_M3Pro_Joy.sh — Lance le container ROS2 principal du M3 PRO
+# Docker_M3Pro_Joy.sh — lance le container ROS2 du M3 PRO avec notre persistance
 #
-# Comportement :
-#   - Attend que Docker soit pret
-#   - Si le container "m3pro_main" existe deja -> le redemarre (garde /root/*)
-#   - Sinon -> le cree avec un nom fixe (pas de noms random angry_ptolemy...)
+# Remplace le script Yahboom d'origine. Différences :
+#   - container nommé "m3pro" (stable, pas de hunting docker ps)
+#   - --restart=unless-stopped (revient apres crash + reboot host)
+#   - bind-mount /home/jetson/roblaude_ws (NOTRE workspace, source de verite)
+#   - bind-mount /home/jetson/robot_maps (cartes SLAM persistees)
+#   - bind-mount /etc/roblaude (broker_ip mis a jour par sync_time.sh)
+#   - PAS de mount du m3pro_teacher_ws (on n'utilise plus le code prof)
+#   - lance NOTRE container_autostart.sh comme PID 1
 #
-# Avantage : tu retrouves tes fichiers perso dans /root/ entre les reboots
-# (ex: /root/launch/, /root/scan_restamper.py, /root/odom_to_tf.py).
+# Installe par install_persistence.sh sur /home/jetson/Docker_M3Pro_Joy.sh,
+# appele par l'autostart Yahboom existant (~/.config/autostart/uros.desktop).
 
-CONTAINER_NAME="m3pro_main"
-IMAGE="192.168.2.51:5000/rosmaster-m3pro-nano:1.1.0"
-
-# 1) Attend le demon Docker
+# Attendre le demon Docker
 while true; do
     if systemctl is-active --quiet docker; then
-        echo "✅ Docker service has been started"
         break
     fi
-    echo "⏳ The Docker service has not started, waiting..."
     sleep 1
 done
 
-xhost +
+# Autoriser X local pour le container
+xhost +local:root >/dev/null 2>&1 || true
 
-# 2) Container deja existant ? -> on le relance simplement
-if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-    echo "ℹ️  Container '${CONTAINER_NAME}' deja existant, redemarrage..."
-    docker start -ai "${CONTAINER_NAME}"
-    exit $?
+# Repertoires hote persistants
+mkdir -p /home/jetson/roblaude_ws
+mkdir -p /home/jetson/robot_maps
+mkdir -p /etc/roblaude
+
+# Recreer "m3pro" a chaque boot pour que les nouveaux volumes/flags prennent.
+# Le container persiste via --restart=unless-stopped tant que ce script n'est
+# pas rejoue (ex: relogin).
+if docker ps -a --format '{{.Names}}' | grep -qx m3pro; then
+    docker stop m3pro >/dev/null 2>&1 || true
+    docker rm m3pro >/dev/null 2>&1 || true
 fi
 
-# 3) Sinon : creation initiale
-echo "🚀 Creation du container '${CONTAINER_NAME}' (premiere fois)"
-docker run -it \
-    --name "${CONTAINER_NAME}" \
-    --restart unless-stopped \
-    --net=host \
-    --env="DISPLAY" \
-    --env="QT_X11_NO_MITSHM=1" \
-    -e PULSE_SERVER=unix:/run/user/1000/pulse/native \
-    -e ALSA_CARD=0 \
-    -e XDG_RUNTIME_DIR=/tmp/runtime-$USER \
-    -v /run/user/1000/pulse:/run/user/1000/pulse:ro \
-    -v ~/.config/pulse:/root/.config/pulse:ro \
-    -v /tmp/.X11-unix:/tmp/.X11-unix \
-    -v /home/jetson/launch:/root/launch \
-    --device=/dev/bus/usb \
-    --security-opt apparmor:unconfined \
-    --device=/dev/input \
-    "${IMAGE}" /bin/bash /root/joy.sh
+docker run -d \
+  --name m3pro \
+  --restart=unless-stopped \
+  --net=host \
+  --env="DISPLAY" \
+  --env="QT_X11_NO_MITSHM=1" \
+  -e PULSE_SERVER=unix:/run/user/1000/pulse/native \
+  -e ALSA_CARD=0 \
+  -e XDG_RUNTIME_DIR=/tmp/runtime-jetson \
+  -e ROS_DOMAIN_ID=30 \
+  -e FASTDDS_BUILTIN_TRANSPORTS=UDPv4 \
+  -v /run/user/1000/pulse:/run/user/1000/pulse:ro \
+  -v /home/jetson/.config/pulse:/root/.config/pulse:ro \
+  -v /tmp/.X11-unix:/tmp/.X11-unix \
+  -v /home/jetson/roblaude_ws:/root/roblaude_ws \
+  -v /home/jetson/robot_maps:/root/maps \
+  -v /etc/roblaude:/etc/roblaude:ro \
+  --device=/dev/bus/usb \
+  --device=/dev/input \
+  --security-opt apparmor:unconfined \
+  192.168.2.51:5000/rosmaster-m3pro-nano:1.1.0 \
+  /bin/bash /root/roblaude_ws/scripts/container_autostart.sh
+
+echo "Container m3pro lance."
+docker ps --filter name=m3pro --format '  {{.Names}}: {{.Status}}'

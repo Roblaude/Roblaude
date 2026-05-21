@@ -16,7 +16,7 @@ const SCHEMA_VERSION = 1
 
 const missionAckSchema = z.object({
   messageId: z.string().min(1),
-  timestamp: z.string().datetime(),
+  timestamp: z.string().datetime({ offset: true }),
   missionId: z.number().int().positive(),
   result: z.enum(['accepted', 'rejected']),
   reason: z.string().optional(),
@@ -26,7 +26,7 @@ const missionAckSchema = z.object({
 )
 
 const missionStatusSchema = z.object({
-  timestamp: z.string().datetime(),
+  timestamp: z.string().datetime({ offset: true }),
   missionId: z.number().int().positive(),
   state: z.nativeEnum(MissionStatus),
   progress: z.number().min(0).max(1).optional(),
@@ -34,7 +34,7 @@ const missionStatusSchema = z.object({
 
 const missionResultSchema = z.object({
   messageId: z.string().min(1),
-  timestamp: z.string().datetime(),
+  timestamp: z.string().datetime({ offset: true }),
   missionId: z.number().int().positive(),
   result: z.enum(['completed', 'failed', 'cancelled']),
   reason: z.string().optional(),
@@ -52,7 +52,7 @@ const RESULT_TO_STATUS = {
 
 // telemetry/battery (spec §5.2) — Robot.battery est un Int 0-100
 const batterySchema = z.object({
-  timestamp: z.string().datetime(),
+  timestamp: z.string().datetime({ offset: true }),
   voltage: z.number().optional(),
   percent: z.number().int().min(0).max(100),
   charging: z.boolean().optional(),
@@ -60,7 +60,7 @@ const batterySchema = z.object({
 
 // telemetry/position (spec §5.1) — pose 2D du robot (frame map ou odom)
 const positionSchema = z.object({
-  timestamp: z.string().datetime(),
+  timestamp: z.string().datetime({ offset: true }),
   x: z.number(),
   y: z.number(),
   theta: z.number().optional(),
@@ -71,13 +71,13 @@ const positionSchema = z.object({
 // OFFLINE n'est pas publie par le robot lui-meme : c'est deduit du Last Will
 // sur le topic connection (cf. handleConnection).
 const statusSchema = z.object({
-  timestamp: z.string().datetime(),
+  timestamp: z.string().datetime({ offset: true }),
   state: z.enum(['AVAILABLE', 'BUSY', 'ERROR']),
 })
 
 // connection (spec §5.5) — Last Will retained, online:false a la coupure
 const connectionSchema = z.object({
-  timestamp: z.string().datetime(),
+  timestamp: z.string().datetime({ offset: true }),
   online: z.boolean(),
 })
 

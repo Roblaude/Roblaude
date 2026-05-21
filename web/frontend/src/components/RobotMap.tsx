@@ -1,5 +1,16 @@
+import { useEffect, useState } from 'react'
 import { useRobotStore } from '../stores/robotStore'
 import { useMissionStore } from '../stores/missionStore'
+import { apiFetch } from '../lib/api'
+
+interface MapMeta {
+  url: string
+  resolution: number
+  origin: { x: number; y: number; theta: number }
+  width?: number
+  height?: number
+  updatedAt: string
+}
 
 // Carte 2D minimaliste — SVG natif, pas de lib.
 // Convention de repere :
@@ -29,7 +40,36 @@ function ry(y: number): number {
 export function RobotMap({ className }: Props) {
   const status = useRobotStore((s) => s.status)
   const position = useRobotStore((s) => s.position)
+  const robotId = useRobotStore((s) => s.id)
   const missions = useMissionStore((s) => s.missions)
+
+  // Carte SLAM (PGM converti en PNG cote backend) — chargee une fois au mount.
+  // Le PNG est sub-resource dans le SVG et le navigateur le cache (Cache-Control).
+  const [mapMeta, setMapMeta] = useState<MapMeta | null>(null)
+  const [imgDims, setImgDims] = useState<{ w: number; h: number } | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    apiFetch(`/robots/${robotId}/map`)
+      .then(async (r) => (r.ok ? (await r.json()) as MapMeta : null))
+      .then((meta) => {
+        if (!cancelled) setMapMeta(meta)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [robotId])
+
+  // Dimensions de l'image (en pixels) — on les recupere via onLoad du <image>.
+  // En SVG natif, l'event onLoad d'un <image> n'expose pas naturalWidth donc
+  // on charge via une Image() side-band.
+  useEffect(() => {
+    if (!mapMeta) return
+    const img = new Image()
+    img.onload = () => setImgDims({ w: img.naturalWidth, h: img.naturalHeight })
+    img.src = mapMeta.url
+  }, [mapMeta])
 
   // Mission active (s'il y en a une) — pour afficher from/to
   const active = missions.find((m) =>
@@ -75,6 +115,28 @@ export function RobotMap({ className }: Props) {
           </pattern>
         </defs>
         <rect width={MAP_W} height={MAP_H} fill="url(#grid)" />
+
+        {/* Carte SLAM en background si dispo. Convention PGM :
+            - origin (m) = coord en frame map du coin bas-gauche du PGM
+            - resolution (m/px) = taille d'un pixel
+            On convertit la zone couverte en coord SVG. */}
+        {mapMeta && imgDims && (() => {
+          const mapWm = imgDims.w * mapMeta.resolution
+          const mapHm = imgDims.h * mapMeta.resolution
+          const x0 = mapMeta.origin.x
+          const y1 = mapMeta.origin.y + mapHm // coord robot du coin HAUT-gauche
+          return (
+            <image
+              href={mapMeta.url}
+              x={rx(x0)}
+              y={ry(y1)}
+              width={mapWm * MAP_SCALE_PX_PER_M}
+              height={mapHm * MAP_SCALE_PX_PER_M}
+              opacity={0.85}
+              preserveAspectRatio="none"
+            />
+          )
+        })()}
 
         {/* axes : centre */}
         <line x1={0} y1={MAP_H / 2} x2={MAP_W} y2={MAP_H / 2}

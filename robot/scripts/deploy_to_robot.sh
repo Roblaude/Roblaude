@@ -15,7 +15,7 @@ source "$SCRIPT_DIR/find_robot.sh"
 ROBOT_USER="${ROBOT_USER:-jetson}"
 ROBOT_PASS="${ROBOT_PASS:-yahboom}"
 DEST_DIR="${DEST_DIR:-/home/jetson/launch}"
-CONTAINER="${CONTAINER:-m3pro_main}"
+CONTAINER="${CONTAINER:-m3pro}"
 CONTAINER_DEST="${CONTAINER_DEST:-/root/launch}"
 
 # Auto-detect robot par MAC

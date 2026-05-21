@@ -2,7 +2,7 @@
 # start_all.sh - Lance toute la stack ROS2 de navigation RobLaude
 #
 # A lancer DANS le container ROS2 du robot :
-#     docker exec m3pro_main bash /root/roblaude_ws/src/robot/scripts/start_all.sh
+#     docker exec m3pro bash /root/roblaude_ws/src/robot/scripts/start_all.sh
 #
 # Prerequis : le package roblaude_nav doit etre compile (colcon build)
 # dans $ROBLAUDE_WS.

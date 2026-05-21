@@ -3,13 +3,13 @@
 #
 # Comportement :
 #   - Attend que Docker soit pret
-#   - Si le container "m3pro_main" existe deja -> le redemarre (garde /root/*)
+#   - Si le container "m3pro" existe deja -> le redemarre (garde /root/*)
 #   - Sinon -> le cree avec un nom fixe (pas de noms random angry_ptolemy...)
 #
 # Avantage : tu retrouves tes fichiers perso dans /root/ entre les reboots
 # (ex: /root/launch/, /root/scan_restamper.py, /root/odom_to_tf.py).
 
-CONTAINER_NAME="m3pro_main"
+CONTAINER_NAME="m3pro"
 IMAGE="192.168.2.51:5000/rosmaster-m3pro-nano:1.1.0"
 
 # 1) Attend le demon Docker

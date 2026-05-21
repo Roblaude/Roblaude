@@ -4,7 +4,7 @@
 # Ce qu il fait (dans l ordre) :
 #   1) Auto-detecte l IP du robot par MAC address (resiste aux changements DHCP)
 #   2) Fixe l horloge du Jetson (pas de RTC -> date perdue a chaque extinction)
-#   3) Verifie que m3pro_main et micro_ros_agent tournent (les demarre sinon)
+#   3) Verifie que m3pro et micro_ros_agent tournent (les demarre sinon)
 #   4) Lance la stack ROS2 complete (start_all.sh dans le container)
 #   5) Ouvre Foxglove Studio (si installe) sur l URL du bridge
 #
@@ -24,7 +24,7 @@ source "$SCRIPT_DIR/find_robot.sh"
 
 ROBOT_USER="${ROBOT_USER:-jetson}"
 ROBOT_PASS="${ROBOT_PASS:-yahboom}"
-CONTAINER="${CONTAINER:-m3pro_main}"
+CONTAINER="${CONTAINER:-m3pro}"
 AGENT_CONTAINER="${AGENT_CONTAINER:-micro_ros_agent}"
 
 OPEN_FOXGLOVE=true

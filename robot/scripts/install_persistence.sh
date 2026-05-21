@@ -34,7 +34,9 @@ TEACHER_WS=/home/jetson/m3pro_teacher_ws
 DOCKER_LAUNCHER=/home/jetson/Docker_M3Pro_Joy.sh
 
 echo "━━━ Etape 1/7 : fake-hwclock + chrony ━━━"
-sudo apt-get update -qq
+# apt update peut echouer sur des repos morts (ex: nvidia-l4t-apt) — on
+# ignore, l'install reussira tant que le mirror Ubuntu repond.
+sudo apt-get update -qq || true
 sudo apt-get install -y fake-hwclock chrony
 sudo systemctl enable --now fake-hwclock chrony
 echo "   horloge actuelle : $(date)"

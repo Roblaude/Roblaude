@@ -28,7 +28,16 @@ mkdir -p "$MAPS_DIR" /tmp/roslogs
 
 # --- Deps Python non incluses dans l'image Docker Yahboom ---
 # paho-mqtt manque (necessaire pour roblaude_mqtt). pip install idempotent.
-python3 -c "import paho.mqtt" 2>/dev/null || pip install --quiet --user 'paho-mqtt~=1.6'
+# Non persiste entre recreate container (pip --user va dans /root/.local), donc
+# on rejoue a chaque autostart — idempotent et rapide (0.5s si deja la).
+SKIP_MQTT=0
+if ! python3 -c "import paho.mqtt" 2>/dev/null; then
+    echo "[autostart] installation paho-mqtt..."
+    if ! pip install --quiet --user 'paho-mqtt~=1.6'; then
+        echo "[autostart] ECHEC pip install paho-mqtt — bridge MQTT desactive"
+        SKIP_MQTT=1
+    fi
+fi
 
 # --- Source de l'env ROS et des drivers Yahboom (dans l'image, jamais wipes) ---
 source /opt/ros/humble/setup.bash
@@ -38,8 +47,14 @@ source /opt/ros/humble/setup.bash
 # --- First-run build du workspace RobLaude si vide ---
 if [ -d "$ROBLAUDE_WS/src" ] && [ ! -f "$ROBLAUDE_WS/install/setup.bash" ]; then
   echo "[autostart] premier build du workspace RobLaude..."
-  ( cd "$ROBLAUDE_WS" && colcon build --symlink-install ) 2>&1 | tail -20 \
-    || echo "[autostart] WARN: colcon build a fini avec des erreurs"
+  # pipefail pour que le code retour de colcon remonte au-dessus de tail
+  set -o pipefail
+  if ( cd "$ROBLAUDE_WS" && colcon build --symlink-install ) 2>&1 | tail -20; then
+    echo "[autostart] colcon build OK"
+  else
+    echo "[autostart] ECHEC colcon build — nodes RobLaude ne seront pas lances"
+  fi
+  set +o pipefail
 fi
 
 [ -f "$ROBLAUDE_WS/install/setup.bash" ] && source "$ROBLAUDE_WS/install/setup.bash"
@@ -47,7 +62,13 @@ fi
 # --- IP du broker MQTT (Mac), mise a jour par sync_time.sh ---
 BROKER_HOST="localhost"
 if [ -r "$BROKER_IP_FILE" ]; then
-    BROKER_HOST="$(cat "$BROKER_IP_FILE" | tr -d '[:space:]')"
+    FILE_IP="$(cat "$BROKER_IP_FILE" | tr -d '[:space:]')"
+    # Fichier vide ou whitespace-only -> on garde localhost en fallback
+    if [ -n "$FILE_IP" ]; then
+        BROKER_HOST="$FILE_IP"
+    else
+        echo "[autostart] WARN $BROKER_IP_FILE vide, fallback BROKER_HOST=localhost"
+    fi
 fi
 echo "[autostart] broker MQTT cible : $BROKER_HOST"
 
@@ -69,7 +90,9 @@ spawn_once rsp ros2 launch yahboom_M3Pro_description display_launch.py
 sleep 2
 
 # --- 3) Bridge MQTT (lit /etc/roblaude/broker_ip pour le host) ---
-if [ -f "$ROBLAUDE_WS/install/roblaude_mqtt/share/roblaude_mqtt/launch/mqtt_bridge.launch.py" ]; then
+if [ "$SKIP_MQTT" = 1 ]; then
+    echo "[autostart] bridge MQTT skip — paho-mqtt indisponible"
+elif [ -f "$ROBLAUDE_WS/install/roblaude_mqtt/share/roblaude_mqtt/launch/mqtt_bridge.launch.py" ]; then
     spawn_once mqtt_bridge ros2 launch roblaude_mqtt mqtt_bridge.launch.py "broker_host:=$BROKER_HOST"
 else
     echo "[autostart] roblaude_mqtt pas encore build, bridge non lance"

@@ -23,7 +23,9 @@ mkdir -p /tmp/roslogs
 
 BROKER_HOST="localhost"
 if [ -r "$BROKER_IP_FILE" ]; then
-    BROKER_HOST="$(cat "$BROKER_IP_FILE" | tr -d '[:space:]')"
+    FILE_IP="$(cat "$BROKER_IP_FILE" | tr -d '[:space:]')"
+    # ne surcharge pas BROKER_HOST si fichier vide -> bridge marcherait pas
+    [ -n "$FILE_IP" ] && BROKER_HOST="$FILE_IP"
 fi
 
 # PIDs des process lances, pour la verification finale

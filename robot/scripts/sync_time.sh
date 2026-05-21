@@ -53,6 +53,13 @@ fi
 MAC_IP="$(ipconfig getifaddr en0 2>/dev/null || ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' | head -1)"
 echo ""
 echo "━━━ broker MQTT ━━━"
+
+# Si on n'a pas reussi a deduire l'IP du Mac, abort plutot que d'ecrire vide
+# dans broker_ip (ce qui rendrait le bridge muet au prochain boot).
+if [ -z "$MAC_IP" ]; then
+    echo "   ❌ IP Mac introuvable (en0 down, pas de route ?). broker_ip non touche."
+    exit 2
+fi
 echo "   IP Mac (broker)  : $MAC_IP"
 
 CURRENT=$($SSH "cat $BROKER_IP_FILE 2>/dev/null || echo missing")

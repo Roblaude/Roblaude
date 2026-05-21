@@ -24,10 +24,15 @@ done
 # Autoriser X local pour le container
 xhost +local:root >/dev/null 2>&1 || true
 
-# Repertoires hote persistants
-mkdir -p /home/jetson/roblaude_ws
+# Repertoires hote persistants (jetson est owner, pas de sudo)
+mkdir -p /home/jetson/roblaude_ws/scripts
 mkdir -p /home/jetson/robot_maps
-mkdir -p /etc/roblaude
+# /etc/roblaude est cree par install_persistence.sh (sudo). On ne tente pas
+# mkdir ici : si le dossier n'existe pas, le bind-mount echouera silencieusement
+# (read-only) et BROKER_HOST=localhost fallback dans le container.
+if [ ! -d /etc/roblaude ]; then
+    echo "ATTENTION : /etc/roblaude absent — lance install_persistence.sh d'abord"
+fi
 
 # Recreer "m3pro" a chaque boot pour que les nouveaux volumes/flags prennent.
 # Le container persiste via --restart=unless-stopped tant que ce script n'est
@@ -58,7 +63,14 @@ docker run -d \
   --device=/dev/input \
   --security-opt apparmor:unconfined \
   192.168.2.51:5000/rosmaster-m3pro-nano:1.1.0 \
-  /bin/bash /root/roblaude_ws/scripts/container_autostart.sh
+  /bin/bash -c 'if [ -x /root/roblaude_ws/scripts/container_autostart.sh ]; then
+    exec /bin/bash /root/roblaude_ws/scripts/container_autostart.sh
+  else
+    echo "[boot] container_autostart.sh absent du workspace bind-mounte."
+    echo "[boot] lance deploy_to_robot.sh depuis le Mac, puis relance ce script."
+    echo "[boot] container reste en vie via tail -f /dev/null"
+    exec tail -f /dev/null
+  fi'
 
 echo "Container m3pro lance."
 docker ps --filter name=m3pro --format '  {{.Names}}: {{.Status}}'

@@ -59,7 +59,9 @@ class Recorder:
         self.client.on_message = self._on_message
         self.client.connect(host, port, keepalive=30)
         self.client.loop_start()
-        wait_for(self.client.is_connected)
+        if not wait_for(self.client.is_connected):
+            raise ConnectionError(
+                f'Recorder {name} : pas connecte a {host}:{port} apres timeout')
 
     def _on_message(self, _c, _u, msg):
         try:
@@ -84,7 +86,9 @@ def make_publisher(host, port, name):
     c = mqtt.Client(client_id=name, clean_session=True, protocol=mqtt.MQTTv311)
     c.connect(host, port, keepalive=30)
     c.loop_start()
-    wait_for(c.is_connected)
+    if not wait_for(c.is_connected):
+        raise ConnectionError(
+            f'Publisher {name} : pas connecte a {host}:{port} apres timeout')
     return c
 
 

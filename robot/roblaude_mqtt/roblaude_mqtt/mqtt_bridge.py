@@ -138,10 +138,16 @@ class MqttBridge(Node):
         """MQTT cmd/<action> -> graphe ROS. Message malforme : log + ignore."""
         try:
             payload = json.loads(msg.payload)
-            if payload.get('schemaVersion') != SCHEMA_VERSION:
-                raise ValueError('schemaVersion inconnue')
-        except (json.JSONDecodeError, ValueError) as err:
-            self.get_logger().warn(f'Message rejete sur {msg.topic} : {err}')
+        except json.JSONDecodeError as err:
+            self.get_logger().warn(f'Message rejete sur {msg.topic} : JSON invalide ({err})')
+            return
+        if not isinstance(payload, dict):
+            # un tableau ou un scalaire JSON est valide mais hors-spec ici
+            self.get_logger().warn(f'Message rejete sur {msg.topic} : payload non-objet')
+            return
+        if payload.get('schemaVersion') != SCHEMA_VERSION:
+            self.get_logger().warn(
+                f'Message rejete sur {msg.topic} : schemaVersion inconnue')
             return
 
         action = msg.topic.rsplit('/', 1)[-1]  # …/cmd/<action>
@@ -161,9 +167,23 @@ class MqttBridge(Node):
         self.mqtt.publish(f'{self.base}/{topic}', json.dumps(payload),
                           qos=qos, retain=retain)
 
+    def _forward_json(self, msg, mqtt_topic: str, qos: int, retain: bool):
+        """ROS String JSON -> MQTT. Payload illisible ou non-objet : log + ignore.
+        Sans ca un publisher ROS bavard suffit a casser un callback en boucle."""
+        try:
+            payload = json.loads(msg.data)
+        except json.JSONDecodeError as err:
+            self.get_logger().warn(
+                f'{mqtt_topic} : JSON ROS invalide ignore ({err})')
+            return
+        if not isinstance(payload, dict):
+            self.get_logger().warn(f'{mqtt_topic} : payload ROS non-objet ignore')
+            return
+        self._publish(mqtt_topic, payload, qos=qos, retain=retain)
+
     # Les QoS et le flag retain sont definis dans docs/mqtt-spec.md.
     def _on_position(self, msg):        # T4.1.3
-        self._publish('telemetry/position', json.loads(msg.data), qos=0, retain=True)
+        self._forward_json(msg, 'telemetry/position', qos=0, retain=True)
 
     def _on_battery(self, msg):         # T4.1.10 — /battery (Float32) = tension Yahboom
         voltage = float(msg.data)
@@ -177,16 +197,16 @@ class MqttBridge(Node):
         }, qos=1, retain=True)
 
     def _on_status(self, msg):          # T4.1.11
-        self._publish('status', json.loads(msg.data), qos=1, retain=True)
+        self._forward_json(msg, 'status', qos=1, retain=True)
 
     def _on_mission_ack(self, msg):     # T4.1.4
-        self._publish('mission/ack', json.loads(msg.data), qos=1, retain=False)
+        self._forward_json(msg, 'mission/ack', qos=1, retain=False)
 
     def _on_mission_status(self, msg):  # T4.1.4
-        self._publish('mission/status', json.loads(msg.data), qos=1, retain=True)
+        self._forward_json(msg, 'mission/status', qos=1, retain=True)
 
     def _on_mission_result(self, msg):  # T4.1.5
-        self._publish('mission/result', json.loads(msg.data), qos=2, retain=False)
+        self._forward_json(msg, 'mission/result', qos=2, retain=False)
 
     # ---------- Arret ----------
 
@@ -194,12 +214,18 @@ class MqttBridge(Node):
         """Arret propre : annonce offline (retained) puis ferme la connexion.
         Sans ca, seul le Last Will gere la presence — et il ne se declenche
         pas sur un arret volontaire."""
-        self.mqtt.publish(
+        info = self.mqtt.publish(
             f'{self.base}/connection',
             json.dumps({'schemaVersion': SCHEMA_VERSION,
                         'timestamp': now_iso(), 'online': False}),
             qos=1, retain=True,
         )
+        # sans flush, loop_stop() peut couper avant que offline parte
+        try:
+            info.wait_for_publish(timeout=2.0)
+        except (RuntimeError, ValueError):
+            # broker deja injoignable : le LWT prendra le relais
+            pass
         self.mqtt.disconnect()
         self.mqtt.loop_stop()
 

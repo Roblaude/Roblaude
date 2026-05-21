@@ -145,6 +145,20 @@ describe('RobotMqttAdapter — handlers mission/ack & mission/status', () => {
     expect(prismaMock.mission.update).toHaveBeenCalledTimes(1)
   })
 
+  it('mission/ack — un echec Prisma ne consomme pas le messageId (retry OK)', async () => {
+    prismaMock.mission.update
+      .mockRejectedValueOnce(new Error('DB transitoire'))
+      .mockResolvedValueOnce({})
+    const payload = { messageId: 'm-retry', missionId: 42, result: 'accepted' as const }
+    deliver('roblaude/3/mission/ack', payload)
+    await Promise.resolve(); await Promise.resolve()
+    expect(prismaMock.mission.update).toHaveBeenCalledTimes(1)
+    // Retry du robot avec le meme messageId apres l'echec — doit reessayer
+    deliver('roblaude/3/mission/ack', payload)
+    await Promise.resolve(); await Promise.resolve()
+    expect(prismaMock.mission.update).toHaveBeenCalledTimes(2)
+  })
+
   it('mission/ack malforme est ignore (pas de crash)', async () => {
     deliver('roblaude/3/mission/ack', { missionId: 42 }) // pas de messageId/result
     await Promise.resolve()

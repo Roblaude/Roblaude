@@ -52,6 +52,27 @@ class RobotMqttAdapter {
   // pratique l'update Prisma reste idempotent (meme statut ecrit deux fois).
   private seenMessageIds = new Set<string>()
 
+  /**
+   * Execute fn() une seule fois par messageId.
+   * - Marque immediatement (synchrone) pour que deux deliveries concurrentes
+   *   du meme messageId ne lancent pas deux fn() en parallele.
+   * - Si fn() throw, on retire le messageId du set : un retry du robot pourra
+   *   retenter (sinon un hoquet DB bloquait definitivement — bug Copilot #218).
+   */
+  private async withIdempotence(
+    messageId: string,
+    fn: () => Promise<void>,
+  ): Promise<void> {
+    if (this.seenMessageIds.has(messageId)) return
+    this.seenMessageIds.add(messageId)
+    try {
+      await fn()
+    } catch (err) {
+      this.seenMessageIds.delete(messageId)
+      throw err
+    }
+  }
+
   /** Connexion au broker + abonnement aux topics robot (wildcard multi-robot). */
   connect(): void {
     if (this.client) return // deja connecte — singleton
@@ -152,10 +173,7 @@ class RobotMqttAdapter {
       return
     }
     const { messageId, missionId, result, reason } = parsed.data
-    if (this.seenMessageIds.has(messageId)) return
-    this.seenMessageIds.add(messageId)
-
-    try {
+    await this.withIdempotence(messageId, async () => {
       if (result === 'accepted') {
         await prisma.mission.update({
           where: { id: missionId },
@@ -167,10 +185,11 @@ class RobotMqttAdapter {
           data: { status: MissionStatus.FAILED, failureReason: reason ?? 'rejected' },
         })
       }
-    } catch (err) {
+    }).catch((err) => {
+      // L'echec NE marque PAS le messageId comme vu (cf. withIdempotence)
       console.error('[mqtt] update mission/ack :',
         err instanceof Error ? err.message : err)
-    }
+    })
   }
 
   // mission/status — propage le sous-etat courant. Pas de messageId
@@ -202,14 +221,11 @@ class RobotMqttAdapter {
       return
     }
     const { messageId, missionId, result, reason } = parsed.data
-    if (this.seenMessageIds.has(messageId)) return
-    this.seenMessageIds.add(messageId)
-
     const status = RESULT_TO_STATUS[result]
     const missionData: { status: MissionStatus; failureReason?: string } = { status }
     if (result === 'failed') missionData.failureReason = reason ?? 'failed'
 
-    try {
+    await this.withIdempotence(messageId, async () => {
       await prisma.$transaction([
         prisma.mission.update({ where: { id: missionId }, data: missionData }),
         prisma.robot.update({
@@ -217,10 +233,11 @@ class RobotMqttAdapter {
           data: { status: RobotStatus.AVAILABLE },
         }),
       ])
-    } catch (err) {
+    }).catch((err) => {
+      // L'echec NE marque PAS le messageId comme vu (cf. withIdempotence)
       console.error('[mqtt] update mission/result :',
         err instanceof Error ? err.message : err)
-    }
+    })
   }
 
   /** Fermeture propre — a appeler a l'arret du serveur. */

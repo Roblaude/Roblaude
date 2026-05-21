@@ -33,12 +33,18 @@ ROBLAUDE_WS=/home/jetson/roblaude_ws
 TEACHER_WS=/home/jetson/m3pro_teacher_ws
 DOCKER_LAUNCHER=/home/jetson/Docker_M3Pro_Joy.sh
 
-echo "━━━ Etape 1/7 : fake-hwclock + chrony ━━━"
+echo "━━━ Etape 1/7 : fake-hwclock (NTP impossible — reseau ecole bloque UDP 123) ━━━"
 # apt update peut echouer sur des repos morts (ex: nvidia-l4t-apt) — on
 # ignore, l'install reussira tant que le mirror Ubuntu repond.
 sudo apt-get update -qq || true
-sudo apt-get install -y fake-hwclock chrony
-sudo systemctl enable --now fake-hwclock chrony
+sudo apt-get install -y fake-hwclock
+sudo systemctl enable --now fake-hwclock
+# Si chrony est deja installe, on le masque pour ne pas qu'il tente NTP en
+# boucle (sera unmasked si on retrouve un reseau avec NTP plus tard).
+if systemctl list-unit-files | grep -q '^chrony.service'; then
+    sudo systemctl stop chrony 2>/dev/null || true
+    sudo systemctl disable chrony 2>/dev/null || true
+fi
 echo "   horloge actuelle : $(date)"
 
 echo ""

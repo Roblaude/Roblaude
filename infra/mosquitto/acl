@@ -1,0 +1,21 @@
+# ACL Mosquitto — spec §7
+# Convention : 1 user par identité fonctionnelle (backend, robot-N).
+# Le backend a acces lecture+ecriture a tout. Chaque robot est cantonne
+# a son namespace roblaude/{id}/# pour la publication et a son
+# roblaude/{id}/cmd/# en lecture seule.
+
+# Backend : tous les droits sur le namespace roblaude
+user backend
+topic readwrite roblaude/#
+
+# Robot 1 — modele a dupliquer pour chaque robot ajoute
+user robot-1
+# Le robot publie sa telemetrie et son etat
+topic write roblaude/1/telemetry/#
+topic write roblaude/1/status
+topic write roblaude/1/connection
+topic write roblaude/1/mission/ack
+topic write roblaude/1/mission/status
+topic write roblaude/1/mission/result
+# Le robot lit les commandes du backend
+topic read roblaude/1/cmd/#

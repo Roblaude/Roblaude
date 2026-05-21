@@ -9,7 +9,7 @@
     remonte la telemetrie du robot vers le broker MQTT.
     Contrat de communication : docs/mqtt-spec.md.
   </description>
-  <maintainer email="[email protected]">Wissem</maintainer>
+  <maintainer email="wissemkarboub@gmail.com">Wissem</maintainer>
   <license>MIT</license>
 
   <buildtool_depend>ament_python</buildtool_depend>

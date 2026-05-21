@@ -9,7 +9,7 @@
     cartographie SLAM Toolbox, la navigation Nav2, et les outils de
     visualisation (Foxglove, web_video_server).
   </description>
-  <maintainer email="[email protected]">Wissem</maintainer>
+  <maintainer email="wissemkarboub@gmail.com">Wissem</maintainer>
   <license>MIT</license>
 
   <buildtool_depend>ament_python</buildtool_depend>

@@ -1,57 +1,85 @@
 #!/bin/bash
-# deploy_to_robot.sh — Pousse les launch files vers le robot
+# deploy_to_robot.sh — pousse nos packages ROS2 + nos scripts dans le workspace
+# persistant /home/jetson/roblaude_ws sur le robot, puis lance colcon build dans
+# le container.
 #
-# Usage : ./deploy_to_robot.sh
+# Source de verite cote Mac (ce repo) :
+#   robot/roblaude_nav/    -> roblaude_ws/src/roblaude_nav/
+#   robot/roblaude_mqtt/   -> roblaude_ws/src/roblaude_mqtt/
+#   robot/scripts/         -> roblaude_ws/scripts/   (autostart, helpers)
 #
-# Prerequis :
-#   - sshpass installe (brew install sshpass)
-#   - Robot accessible sur 172.20.10.2 (ssh jetson@... fonctionne)
+# Idempotent. rsync delta = rapide meme avec gros workspace.
+#
+# Usage :
+#   ./robot/scripts/deploy_to_robot.sh             # deploy + build
+#   ./robot/scripts/deploy_to_robot.sh --no-build  # deploy only
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 source "$SCRIPT_DIR/find_robot.sh"
 
 ROBOT_USER="${ROBOT_USER:-jetson}"
-ROBOT_PASS="${ROBOT_PASS:-yahboom}"
-DEST_DIR="${DEST_DIR:-/home/jetson/launch}"
-CONTAINER="${CONTAINER:-m3pro_main}"
-CONTAINER_DEST="${CONTAINER_DEST:-/root/launch}"
+CONTAINER="${CONTAINER:-m3pro}"
+WS_HOST="${WS_HOST:-/home/jetson/roblaude_ws}"
+WS_CONTAINER="${WS_CONTAINER:-/root/roblaude_ws}"
 
-# Auto-detect robot par MAC
+DO_BUILD=true
+if [[ "$1" == "--no-build" ]]; then
+    DO_BUILD=false
+fi
+
 if ! find_robot; then
     exit 1
 fi
 
-LOCAL_DIR="$(cd "$SCRIPT_DIR/../roblaude_nav/launch" && pwd)"
+SSH_OPTS="-o StrictHostKeyChecking=accept-new"
+SSH="ssh $SSH_OPTS $ROBOT_USER@$ROBOT_IP"
+RSYNC_E="ssh $SSH_OPTS"
 
-echo "=== Deploy roblaude_nav/launch/ vers $ROBOT_USER@$ROBOT_IP:$DEST_DIR ==="
-echo "Source : $LOCAL_DIR"
+echo "━━━ Deploy RobLaude → $ROBOT_USER@$ROBOT_IP:$WS_HOST ━━━"
+
+# 1) Prepa structure cote hote
+$SSH "mkdir -p $WS_HOST/src $WS_HOST/scripts"
+
+# 2) Push des packages ROS (delete-after pour nettoyer fichiers supprimes)
+echo "▶ rsync packages..."
+for pkg in roblaude_nav roblaude_mqtt; do
+    if [ -d "$REPO_ROOT/robot/$pkg" ]; then
+        rsync -avz --delete-after -e "$RSYNC_E" \
+            --exclude '__pycache__' --exclude '*.pyc' --exclude '.pytest_cache' \
+            "$REPO_ROOT/robot/$pkg/" \
+            "$ROBOT_USER@$ROBOT_IP:$WS_HOST/src/$pkg/"
+    fi
+done
+
+# 3) Push des scripts (autostart, helpers, etc.)
+echo "▶ rsync scripts..."
+rsync -avz --delete-after -e "$RSYNC_E" \
+    --exclude '__pycache__' \
+    "$REPO_ROOT/robot/scripts/" \
+    "$ROBOT_USER@$ROBOT_IP:$WS_HOST/scripts/"
+
+$SSH "chmod +x $WS_HOST/scripts/*.sh"
+
+# 4) Colcon build dans le container
+if $DO_BUILD; then
+    echo "▶ colcon build dans le container $CONTAINER..."
+    $SSH "docker exec $CONTAINER bash -c '
+        source /opt/ros/humble/setup.bash &&
+        source /root/yahboomcar_ws/install/setup.bash 2>/dev/null &&
+        cd $WS_CONTAINER &&
+        colcon build --symlink-install 2>&1 | tail -20
+    '"
+fi
+
 echo ""
-
-# Creer le dossier distant si besoin
-sshpass -p "$ROBOT_PASS" ssh -o StrictHostKeyChecking=no "$ROBOT_USER@$ROBOT_IP" \
-    "mkdir -p $DEST_DIR"
-
-# Transfert rsync (delta = rapide)
-sshpass -p "$ROBOT_PASS" rsync -avz --delete \
-    -e "ssh -o StrictHostKeyChecking=no" \
-    "$LOCAL_DIR/" \
-    "$ROBOT_USER@$ROBOT_IP:$DEST_DIR/"
-
-echo ""
-echo "=== Propagation vers le container $CONTAINER:$CONTAINER_DEST ==="
-# Le container ROS2 n a pas de volume vers ~/launch : on copie dedans
-sshpass -p "$ROBOT_PASS" ssh -o StrictHostKeyChecking=no "$ROBOT_USER@$ROBOT_IP" \
-    "docker exec $CONTAINER mkdir -p $CONTAINER_DEST && docker cp $DEST_DIR/. $CONTAINER:$CONTAINER_DEST/"
-
-echo ""
-echo "✅ Deploiement termine (host + container)."
-echo ""
-echo "Pour lancer un fichier :"
-echo "  ssh $ROBOT_USER@$ROBOT_IP"
-echo "  docker exec -it $CONTAINER bash"
-echo "  source /opt/ros/humble/setup.bash"
-echo "  source /root/yahboomcar_ws/install/setup.bash"
-echo "  export ROS_DOMAIN_ID=30"
-echo "  ros2 launch $CONTAINER_DEST/lidar.launch.py"
+echo "✅ Deploy termine."
+echo "   Workspace hote   : $ROBOT_USER@$ROBOT_IP:$WS_HOST"
+echo "   Visible container: $WS_CONTAINER  (via bind-mount)"
+if $DO_BUILD; then
+    echo "   Build : reussi (cf. sortie ci-dessus)"
+else
+    echo "   Build : skip — relance avec './deploy_to_robot.sh' pour builder"
+fi

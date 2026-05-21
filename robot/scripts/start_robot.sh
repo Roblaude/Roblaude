@@ -24,7 +24,7 @@ source "$SCRIPT_DIR/find_robot.sh"
 
 ROBOT_USER="${ROBOT_USER:-jetson}"
 ROBOT_PASS="${ROBOT_PASS:-yahboom}"
-CONTAINER="${CONTAINER:-m3pro_main}"
+CONTAINER="${CONTAINER:-m3pro}"
 AGENT_CONTAINER="${AGENT_CONTAINER:-micro_ros_agent}"
 
 OPEN_FOXGLOVE=true
@@ -85,7 +85,7 @@ done
 if [ -z "${NO_START:-}" ]; then
     echo ""
     echo "▶ Etape 4/5 : Lancement stack ROS2 (start_all.sh)"
-    ssh_cmd "docker exec $CONTAINER bash /root/roblaude_ws/src/robot/scripts/start_all.sh" 2>&1 | sed 's/^/   /'
+    ssh_cmd "docker exec $CONTAINER bash /root/roblaude_ws/scripts/start_all.sh" 2>&1 | sed 's/^/   /'
 
     echo ""
     echo "   ⏳ Attente 10s stabilisation..."

@@ -21,7 +21,12 @@ vi.mock('mqtt', () => ({
 }))
 
 const { prismaMock } = vi.hoisted(() => ({
-  prismaMock: { mission: { update: vi.fn().mockResolvedValue({}) } },
+  prismaMock: {
+    mission: { update: vi.fn().mockResolvedValue({}) },
+    robot: { update: vi.fn().mockResolvedValue({}) },
+    // $transaction recoit un tableau de promesses Prisma et resout dans l'ordre.
+    $transaction: vi.fn((ops: unknown[]) => Promise.all(ops)),
+  },
 }))
 vi.mock('../lib/prisma', () => ({ default: prismaMock }))
 
@@ -163,5 +168,114 @@ describe('RobotMqttAdapter — handlers mission/ack & mission/status', () => {
     deliver('roblaude/3/mission/status', { missionId: 42, state: 'WAT' })
     await Promise.resolve()
     expect(prismaMock.mission.update).not.toHaveBeenCalled()
+  })
+})
+
+describe('RobotMqttAdapter — handlers mission/result', () => {
+  beforeEach(() => {
+    prismaMock.mission.update.mockClear()
+    prismaMock.robot.update.mockClear()
+    prismaMock.$transaction.mockClear()
+    robotMqtt.disconnect()
+    robotMqtt.connect()
+  })
+
+  it('completed: mission COMPLETED + robot AVAILABLE', async () => {
+    deliver('roblaude/3/mission/result', {
+      messageId: 'r-1',
+      missionId: 42,
+      result: 'completed',
+    })
+    await Promise.resolve()
+    expect(prismaMock.mission.update).toHaveBeenCalledWith({
+      where: { id: 42 },
+      data: { status: 'COMPLETED' },
+    })
+    expect(prismaMock.robot.update).toHaveBeenCalledWith({
+      where: { id: 3 },
+      data: { status: 'AVAILABLE' },
+    })
+  })
+
+  it('failed: mission FAILED + failureReason + robot AVAILABLE', async () => {
+    deliver('roblaude/3/mission/result', {
+      messageId: 'r-2',
+      missionId: 42,
+      result: 'failed',
+      reason: 'navigation-timeout',
+    })
+    await Promise.resolve()
+    expect(prismaMock.mission.update).toHaveBeenCalledWith({
+      where: { id: 42 },
+      data: { status: 'FAILED', failureReason: 'navigation-timeout' },
+    })
+    expect(prismaMock.robot.update).toHaveBeenCalledWith({
+      where: { id: 3 },
+      data: { status: 'AVAILABLE' },
+    })
+  })
+
+  it('failed sans reason ecrit "failed" en fallback', async () => {
+    deliver('roblaude/3/mission/result', {
+      messageId: 'r-3',
+      missionId: 42,
+      result: 'failed',
+    })
+    await Promise.resolve()
+    expect(prismaMock.mission.update).toHaveBeenCalledWith({
+      where: { id: 42 },
+      data: { status: 'FAILED', failureReason: 'failed' },
+    })
+  })
+
+  it('cancelled: mission CANCELLED + robot AVAILABLE', async () => {
+    deliver('roblaude/3/mission/result', {
+      messageId: 'r-4',
+      missionId: 42,
+      result: 'cancelled',
+    })
+    await Promise.resolve()
+    expect(prismaMock.mission.update).toHaveBeenCalledWith({
+      where: { id: 42 },
+      data: { status: 'CANCELLED' },
+    })
+    expect(prismaMock.robot.update).toHaveBeenCalledWith({
+      where: { id: 3 },
+      data: { status: 'AVAILABLE' },
+    })
+  })
+
+  it('mission ET robot mis a jour dans la meme transaction', async () => {
+    deliver('roblaude/3/mission/result', {
+      messageId: 'r-5',
+      missionId: 42,
+      result: 'completed',
+    })
+    await Promise.resolve()
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
+  })
+
+  it('mission/result idempotent sur messageId', async () => {
+    const payload = { messageId: 'r-dup', missionId: 42, result: 'completed' as const }
+    deliver('roblaude/3/mission/result', payload)
+    deliver('roblaude/3/mission/result', payload)
+    await Promise.resolve()
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
+  })
+
+  it('mission/result malforme est ignore', async () => {
+    deliver('roblaude/3/mission/result', { missionId: 42, result: 'completed' }) // pas de messageId
+    await Promise.resolve()
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('mission/result avec result invalide est ignore', async () => {
+    deliver('roblaude/3/mission/result', {
+      messageId: 'r-bad',
+      missionId: 42,
+      result: 'exploded',
+    })
+    await Promise.resolve()
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
   })
 })

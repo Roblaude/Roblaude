@@ -20,7 +20,11 @@ services:
     ports:
       - "1883:1883"
     volumes:
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./infra/mosquitto/passwd:/mosquitto/config/passwd:ro
+      - ./infra/mosquitto/acl:/mosquitto/config/acl:ro
+      - mosquitto_data:/mosquitto/data
 
 volumes:
   mysql_data:
+  mosquitto_data:

@@ -1,0 +1,14 @@
+# Format Mosquitto passwd (apres `mosquitto_passwd -U`) : user:hash_bcrypt
+# Genere avec :
+#   touch infra/mosquitto/passwd
+#   docker run --rm -v $(pwd)/infra/mosquitto:/m eclipse-mosquitto:2 \
+#       mosquitto_passwd -b /m/passwd backend backend-CHANGE-ME
+#   docker run --rm -v $(pwd)/infra/mosquitto:/m eclipse-mosquitto:2 \
+#       mosquitto_passwd -b /m/passwd robot-1 robot1-CHANGE-ME
+#
+# Le fichier passwd reel est gitignored. Ne commit JAMAIS les vrais hashes
+# ni les mots de passe en clair.
+
+# Exemple de structure (hashes factices) :
+backend:$7$101$fakebackendhash$fakefakefakefake
+robot-1:$7$101$fakerobot1hash$fakefakefakefake

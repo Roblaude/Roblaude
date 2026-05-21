@@ -44,13 +44,22 @@ echo "━━━ Deploy RobLaude → $ROBOT_USER@$ROBOT_IP:$WS_HOST ━━━"
 $SSH "mkdir -p $WS_HOST/src $WS_HOST/scripts"
 
 # 2) Push des packages ROS (delete-after pour nettoyer fichiers supprimes)
+# Auto-detect : tout dossier dans robot/ qui contient un package.xml (a
+# n'importe quelle profondeur 1-2) OU qui est un workspace de packages.
 echo "▶ rsync packages..."
-for pkg in roblaude_nav roblaude_mqtt; do
-    if [ -d "$REPO_ROOT/robot/$pkg" ]; then
+for dir in "$REPO_ROOT"/robot/*/; do
+    name=$(basename "$dir")
+    [ "$name" = "scripts" ] && continue
+    [ "$name" = "_stub_local" ] && continue
+    # On rsync si le dossier contient un package.xml direct OU au moins
+    # un sous-dossier avec package.xml (workspace de packages — colcon
+    # explorera recursivement).
+    if [ -f "$dir/package.xml" ] || find "$dir" -maxdepth 2 -name 'package.xml' -print -quit | grep -q .; then
         rsync -avz --delete-after -e "$RSYNC_E" \
             --exclude '__pycache__' --exclude '*.pyc' --exclude '.pytest_cache' \
-            "$REPO_ROOT/robot/$pkg/" \
-            "$ROBOT_USER@$ROBOT_IP:$WS_HOST/src/$pkg/"
+            --exclude '.git' --exclude 'build' --exclude 'install' --exclude 'log' \
+            "$dir" \
+            "$ROBOT_USER@$ROBOT_IP:$WS_HOST/src/$name/"
     fi
 done
 

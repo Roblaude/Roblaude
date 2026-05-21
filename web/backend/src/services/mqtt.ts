@@ -1,6 +1,6 @@
 import mqtt, { type MqttClient } from 'mqtt'
 import { randomUUID } from 'node:crypto'
-import { MissionStatus } from '@prisma/client'
+import { MissionStatus, RobotStatus } from '@prisma/client'
 import { z } from 'zod'
 import prisma from '../lib/prisma'
 
@@ -22,6 +22,20 @@ const missionStatusSchema = z.object({
   state: z.nativeEnum(MissionStatus),
   progress: z.number().min(0).max(1).optional(),
 })
+
+const missionResultSchema = z.object({
+  messageId: z.string().min(1),
+  missionId: z.number().int().positive(),
+  result: z.enum(['completed', 'failed', 'cancelled']),
+  reason: z.string().optional(),
+})
+
+// Mapping result -> MissionStatus Prisma
+const RESULT_TO_STATUS = {
+  completed: MissionStatus.COMPLETED,
+  failed: MissionStatus.FAILED,
+  cancelled: MissionStatus.CANCELLED,
+} as const
 
 /** Actions publiables sur roblaude/{robotId}/cmd/{action}. */
 export type CmdAction =
@@ -118,7 +132,7 @@ class RobotMqttAdapter {
       case 'mission':
         if (sub === 'ack') void this.handleMissionAck(robotId, data)
         else if (sub === 'status') void this.handleMissionStatus(data)
-        // TODO #81 : sub === 'result' -> COMPLETED/FAILED/CANCELLED + failureReason
+        else if (sub === 'result') void this.handleMissionResult(robotId, data)
         break
       case 'connection':
         // TODO #202 : data.online === false (Last Will) -> Robot.status = OFFLINE
@@ -175,6 +189,36 @@ class RobotMqttAdapter {
       })
     } catch (err) {
       console.error('[mqtt] update mission/status :',
+        err instanceof Error ? err.message : err)
+    }
+  }
+
+  // mission/result — fin de mission. On met a jour la mission ET on libere
+  // le robot (Robot.status = AVAILABLE) en une seule transaction.
+  private async handleMissionResult(robotId: number, data: Record<string, unknown>) {
+    const parsed = missionResultSchema.safeParse(data)
+    if (!parsed.success) {
+      console.warn('[mqtt] mission/result rejete :', parsed.error.issues)
+      return
+    }
+    const { messageId, missionId, result, reason } = parsed.data
+    if (this.seenMessageIds.has(messageId)) return
+    this.seenMessageIds.add(messageId)
+
+    const status = RESULT_TO_STATUS[result]
+    const missionData: { status: MissionStatus; failureReason?: string } = { status }
+    if (result === 'failed') missionData.failureReason = reason ?? 'failed'
+
+    try {
+      await prisma.$transaction([
+        prisma.mission.update({ where: { id: missionId }, data: missionData }),
+        prisma.robot.update({
+          where: { id: robotId },
+          data: { status: RobotStatus.AVAILABLE },
+        }),
+      ])
+    } catch (err) {
+      console.error('[mqtt] update mission/result :',
         err instanceof Error ? err.message : err)
     }
   }

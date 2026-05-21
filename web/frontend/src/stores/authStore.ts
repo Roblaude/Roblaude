@@ -14,7 +14,6 @@ interface AuthStore {
   loading: boolean
   error: string | null
   login: (email: string, password: string) => Promise<void>
-  register: (email: string, password: string, name: string) => Promise<void>
   logout: () => void
 }
 
@@ -44,28 +43,6 @@ export const useAuthStore = create<AuthStore>()(
           set({ user: json.user, token: json.token })
         } catch (e) {
           set({ error: e instanceof Error ? e.message : 'Erreur connexion' })
-          throw e
-        } finally {
-          set({ loading: false })
-        }
-      },
-
-      register: async (email, password, name) => {
-        set({ loading: true, error: null })
-        try {
-          const res = await fetch(`${API}/auth/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password, name }),
-          })
-          if (!res.ok) {
-            const err = await res.json() as { error: string }
-            throw new Error(err.error)
-          }
-          const json = await res.json() as { user: User; token: string }
-          set({ user: json.user, token: json.token })
-        } catch (e) {
-          set({ error: e instanceof Error ? e.message : 'Erreur inscription' })
           throw e
         } finally {
           set({ loading: false })

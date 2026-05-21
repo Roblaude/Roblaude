@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent } from "react"
-import { useNavigate, Link } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import { useAuthStore } from "../stores/authStore"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -153,13 +153,7 @@ export function LoginPage() {
             style={{ animationDelay: "460ms" }}
           >
             <p className="text-muted-foreground">
-              Nouvel opérateur ?{" "}
-              <Link
-                to="/register"
-                className="text-primary underline-offset-4 hover:underline font-medium"
-              >
-                Demander un accès →
-              </Link>
+              Nouvel opérateur ? Contactez votre administrateur.
             </p>
             <span className="font-mono text-[10px] text-muted-foreground/60 uppercase tracking-widest">
               v1.0 · Roblaude

@@ -42,6 +42,16 @@ describe('Routes protegees (sans token = 401)', () => {
     const res = await request(app).post('/api/missions/1/resume').send({})
     expect(res.status).toBe(401)
   })
+
+  it('POST /api/missions/1/stop → 401', async () => {
+    const res = await request(app).post('/api/missions/1/stop').send({})
+    expect(res.status).toBe(401)
+  })
+
+  it('POST /api/missions/1/confirm-loading → 401', async () => {
+    const res = await request(app).post('/api/missions/1/confirm-loading').send({})
+    expect(res.status).toBe(401)
+  })
 })
 
 describe('Routes publiques', () => {

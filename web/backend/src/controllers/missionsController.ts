@@ -160,6 +160,17 @@ export async function createMission(req: Request, res: Response) {
     },
   })
 
+  // T4.2.2 — publie cmd/mission au robot si un robotId est present. Sans
+  // robotId, la mission reste PENDING ; un assignment ulterieur publiera.
+  if (mission.robotId) {
+    robotMqtt.publishCommand(mission.robotId, 'mission', {
+      missionId: mission.id,
+      type: mission.type,
+      fromPoint: { x: fromPoint.x, y: fromPoint.y, slug: fromPoint.slug },
+      toPoint: { x: toPoint.x, y: toPoint.y, slug: toPoint.slug },
+    })
+  }
+
   res.status(201).json({ data: mission })
 }
 
@@ -283,4 +294,117 @@ export async function resumeMission(req: Request, res: Response) {
     }
     throw err
   }
+}
+
+// états depuis lesquels on peut emergency-stop (en gros tout ce qui est actif)
+const STOPPABLE_STATUSES: MissionStatus[] = [
+  MissionStatus.PENDING,
+  MissionStatus.PAUSED,
+  MissionStatus.NAVIGATING_TO_PICKUP,
+  MissionStatus.WAITING_FOR_LOAD,
+  MissionStatus.NAVIGATING_TO_DESTINATION,
+  MissionStatus.DETECTING_OBJECT,
+  MissionStatus.GRASPING,
+  MissionStatus.TRANSPORTING,
+  MissionStatus.DEPOSITING,
+]
+
+// T4.2.6 — arret d'urgence. Publie cmd/emergency-stop et passe la mission
+// en CANCELLED. Le robot lui-meme republiera un mission/result cancelled
+// quand il aura effectivement stoppe (status terrain fait foi).
+export async function stopMission(req: Request, res: Response) {
+  const id = parseInt(req.params.id, 10)
+  if (isNaN(id)) {
+    res.status(400).json({ error: 'ID invalide' })
+    return
+  }
+
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason : 'user-pressed-stop'
+
+  const mission = await prisma.mission.findUnique({ where: { id } })
+  if (!mission) {
+    res.status(404).json({ error: 'Mission introuvable' })
+    return
+  }
+  if (!STOPPABLE_STATUSES.includes(mission.status)) {
+    res.status(400).json({ error: 'Mission non arretable', status: mission.status })
+    return
+  }
+  if (!mission.robotId) {
+    res.status(400).json({ error: 'Aucun robot assigne a la mission' })
+    return
+  }
+
+  // Update local + libere robot. Le robot republiera son etat reel via
+  // mission/result quand il aura stoppe — ca ecrasera notre CANCELLED si
+  // necessaire.
+  const updated = await prisma.$transaction(async (tx) => {
+    const cancelled = await tx.mission.update({
+      where: { id },
+      data: { status: MissionStatus.CANCELLED, failureReason: reason },
+      include: {
+        fromPoint: true,
+        toPoint: true,
+        robot: { select: { id: true, name: true, status: true } },
+        user: { select: { id: true, name: true, email: true } },
+      },
+    })
+    await tx.robot.update({
+      where: { id: mission.robotId! },
+      data: { status: RobotStatus.AVAILABLE },
+    })
+    return cancelled
+  })
+
+  robotMqtt.publishCommand(mission.robotId, 'emergency-stop', {
+    missionId: id,
+    reason,
+  })
+
+  res.json({ data: updated })
+}
+
+// T4.2.8 — l'utilisateur confirme depuis l'UI que la charge est faite.
+// Publie cmd/loading-confirmed. Le robot reprendra et republiera
+// mission/status quand il bouge vers la destination.
+export async function confirmLoadingMission(req: Request, res: Response) {
+  const id = parseInt(req.params.id, 10)
+  if (isNaN(id)) {
+    res.status(400).json({ error: 'ID invalide' })
+    return
+  }
+
+  const mission = await prisma.mission.findUnique({ where: { id } })
+  if (!mission) {
+    res.status(404).json({ error: 'Mission introuvable' })
+    return
+  }
+  if (mission.status !== MissionStatus.WAITING_FOR_LOAD) {
+    res.status(400).json({
+      error: 'Mission pas en attente de chargement',
+      status: mission.status,
+    })
+    return
+  }
+  if (!mission.robotId) {
+    res.status(400).json({ error: 'Aucun robot assigne a la mission' })
+    return
+  }
+
+  robotMqtt.publishCommand(mission.robotId, 'loading-confirmed', {
+    missionId: id,
+  })
+
+  // On ne change PAS mission.status ici : le robot publiera son sous-etat
+  // suivant (NAVIGATING_TO_DESTINATION) via mission/status apres reception.
+  const refreshed = await prisma.mission.findUnique({
+    where: { id },
+    include: {
+      fromPoint: true,
+      toPoint: true,
+      robot: { select: { id: true, name: true, status: true } },
+      user: { select: { id: true, name: true, email: true } },
+    },
+  })
+  res.json({ data: refreshed })
 }

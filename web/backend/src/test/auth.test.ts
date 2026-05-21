@@ -4,18 +4,19 @@ import { app } from '../app'
 
 describe('Auth', () => {
   describe('POST /api/auth/register', () => {
-    it('retourne 400 si email manquant', async () => {
+    it('retourne 401 sans token (admin-only)', async () => {
       const res = await request(app)
         .post('/api/auth/register')
-        .send({ password: '123456', name: 'Test' })
-      expect(res.status).toBe(400)
+        .send({ email: 'x@x.fr', password: '123456', name: 'Test' })
+      expect(res.status).toBe(401)
     })
 
-    it('retourne 400 si password trop court', async () => {
+    it('retourne 401 avec un token invalide', async () => {
       const res = await request(app)
         .post('/api/auth/register')
-        .send({ email: 'test@test.com', password: '123', name: 'Test' })
-      expect(res.status).toBe(400)
+        .set('Authorization', 'Bearer fake-token')
+        .send({ email: 'x@x.fr', password: '123456', name: 'Test' })
+      expect(res.status).toBe(401)
     })
   })
 

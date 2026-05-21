@@ -7,7 +7,7 @@ import { NewMissionPage } from './pages/NewMissionPage'
 import { AdminPage } from './pages/AdminPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { LoginPage } from './pages/LoginPage'
-import { RegisterPage } from './pages/RegisterPage'
+import { RequireAuth } from './components/RequireAuth'
 import { useAuthStore } from './stores/authStore'
 
 export default function App() {
@@ -17,19 +17,20 @@ export default function App() {
       <Routes>
         {/* Routes publiques */}
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
 
-        {/* Layout commun — sidebar desktop + bottom nav mobile */}
-        <Route element={<AppLayout />}>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/missions" element={<MissionsPage />} />
-          <Route path="/missions/new" element={<NewMissionPage />} />
-          <Route path="/missions/:id" element={<MissionDetailPage />} />
-          <Route
-            path="/admin"
-            element={role === 'ADMIN' ? <AdminPage /> : <Navigate to="/" replace />}
-          />
-          <Route path="/profile" element={<ProfilePage />} />
+        {/* Tout le reste est derriere le RequireAuth */}
+        <Route element={<RequireAuth />}>
+          <Route element={<AppLayout />}>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/missions" element={<MissionsPage />} />
+            <Route path="/missions/new" element={<NewMissionPage />} />
+            <Route path="/missions/:id" element={<MissionDetailPage />} />
+            <Route
+              path="/admin"
+              element={role === 'ADMIN' ? <AdminPage /> : <Navigate to="/" replace />}
+            />
+            <Route path="/profile" element={<ProfilePage />} />
+          </Route>
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

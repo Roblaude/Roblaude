@@ -45,9 +45,9 @@ describe('Routes publiques', () => {
     expect(res.status).toBe(200)
   })
 
-  it('POST /api/auth/register → 400 (sans body)', async () => {
+  it('POST /api/auth/register → 401 (admin-only)', async () => {
     const res = await request(app).post('/api/auth/register').send({})
-    expect(res.status).toBe(400)
+    expect(res.status).toBe(401)
   })
 
   it('POST /api/auth/login → 400 (sans body)', async () => {

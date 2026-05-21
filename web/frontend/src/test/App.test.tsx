@@ -16,4 +16,10 @@ describe('Frontend', () => {
     const missionStore = await import('../stores/missionStore')
     expect(missionStore).toBeDefined()
   })
+
+  it('le composant RequireAuth existe et exporte un composant', async () => {
+    const mod = await import('../components/RequireAuth')
+    expect(mod.RequireAuth).toBeDefined()
+    expect(typeof mod.RequireAuth).toBe('function')
+  })
 })

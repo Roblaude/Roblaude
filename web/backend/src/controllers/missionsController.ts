@@ -90,10 +90,16 @@ const createMissionSchema = z.object({
   toPointId: z.number().int().positive(),
   robotId: z.number().int().positive().optional(),
   objectId: z.number().int().positive().optional(),
-  // todo: userId viendra du token JWT — hardcodé à 1 pour l'instant
 })
 
 export async function createMission(req: Request, res: Response) {
+  // authGuard est en amont de cette route, mais on garde le check explicite
+  // pour le typage et pour eviter tout user injection sur la mission.
+  if (!req.user) {
+    res.status(401).json({ error: 'Non authentifie' })
+    return
+  }
+
   const parsed = createMissionSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({
@@ -143,7 +149,7 @@ export async function createMission(req: Request, res: Response) {
       toPointId,
       robotId: robotId ?? null,
       objectId: objectId ?? null,
-      userId: req.user?.userId ?? 1,
+      userId: req.user.userId,
     },
     include: {
       fromPoint: true,

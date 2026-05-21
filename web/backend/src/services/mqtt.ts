@@ -49,6 +49,28 @@ const RESULT_TO_STATUS = {
   cancelled: MissionStatus.CANCELLED,
 } as const
 
+// telemetry/battery (spec §5.2) — Robot.battery est un Int 0-100
+const batterySchema = z.object({
+  timestamp: z.string().datetime(),
+  voltage: z.number().optional(),
+  percent: z.number().int().min(0).max(100),
+  charging: z.boolean().optional(),
+})
+
+// status — le robot publie son etat applicatif (spec §5.3).
+// OFFLINE n'est pas publie par le robot lui-meme : c'est deduit du Last Will
+// sur le topic connection (cf. handleConnection).
+const statusSchema = z.object({
+  timestamp: z.string().datetime(),
+  state: z.enum(['AVAILABLE', 'BUSY', 'ERROR']),
+})
+
+// connection (spec §5.5) — Last Will retained, online:false a la coupure
+const connectionSchema = z.object({
+  timestamp: z.string().datetime(),
+  online: z.boolean(),
+})
+
 /** Actions publiables sur roblaude/{robotId}/cmd/{action}. */
 export type CmdAction =
   | 'mission'
@@ -171,12 +193,12 @@ class RobotMqttAdapter {
 
     switch (family) {
       case 'telemetry':
+        if (sub === 'battery') void this.handleBattery(robotId, data)
         // TODO #80 : sub === 'position' -> Robot.positionX/Y/heading (throttle)
-        // TODO #202 : sub === 'battery' -> Robot.battery
-        // puis relai WebSocket (position_update / battery_update)
+        // TODO websocket relay : battery_update / position_update
         break
       case 'status':
-        // TODO #202 : mettre a jour Robot.status + relai status_change
+        void this.handleStatus(robotId, data)
         break
       case 'mission':
         if (sub === 'ack') void this.handleMissionAck(robotId, data)
@@ -184,11 +206,81 @@ class RobotMqttAdapter {
         else if (sub === 'result') void this.handleMissionResult(robotId, data)
         break
       case 'connection':
-        // TODO #202 : data.online === false (Last Will) -> Robot.status = OFFLINE
+        void this.handleConnection(robotId, data)
         break
       default:
         console.warn(`[mqtt] famille de topic inconnue : ${family}`)
     }
+  }
+
+  // telemetry/battery — met a jour Robot.battery (percent 0-100).
+  // Le robot publie a ~1 Hz, on update systematiquement (negligeable en DB).
+  private async handleBattery(robotId: number, data: Record<string, unknown>) {
+    const parsed = batterySchema.safeParse(data)
+    if (!parsed.success) {
+      console.warn('[mqtt] telemetry/battery rejete :', parsed.error.issues)
+      return
+    }
+    try {
+      await prisma.robot.update({
+        where: { id: robotId },
+        data: { battery: parsed.data.percent },
+      })
+    } catch (err) {
+      console.error('[mqtt] update battery :',
+        err instanceof Error ? err.message : err)
+    }
+    // TODO websocket : relay battery_update aux clients
+  }
+
+  // status — etat applicatif (AVAILABLE / BUSY / ERROR).
+  // Ne touche pas a OFFLINE (gere par handleConnection via le Last Will).
+  private async handleStatus(robotId: number, data: Record<string, unknown>) {
+    const parsed = statusSchema.safeParse(data)
+    if (!parsed.success) {
+      console.warn('[mqtt] status rejete :', parsed.error.issues)
+      return
+    }
+    try {
+      await prisma.robot.update({
+        where: { id: robotId },
+        data: { status: parsed.data.state as RobotStatus },
+      })
+    } catch (err) {
+      console.error('[mqtt] update status :',
+        err instanceof Error ? err.message : err)
+    }
+    // TODO websocket : relay status_change aux clients
+  }
+
+  // connection — presence du robot via le Last Will MQTT.
+  // online:false (LWT) -> Robot.status = OFFLINE
+  // online:true        -> si etait OFFLINE, on restaure a AVAILABLE.
+  //   (le robot republiera son status precis juste apres, qui ecrasera)
+  private async handleConnection(robotId: number, data: Record<string, unknown>) {
+    const parsed = connectionSchema.safeParse(data)
+    if (!parsed.success) {
+      console.warn('[mqtt] connection rejete :', parsed.error.issues)
+      return
+    }
+    try {
+      if (!parsed.data.online) {
+        await prisma.robot.update({
+          where: { id: robotId },
+          data: { status: RobotStatus.OFFLINE },
+        })
+      } else {
+        // Restore conditionnel : on ne touche que si robot etait OFFLINE
+        await prisma.robot.updateMany({
+          where: { id: robotId, status: RobotStatus.OFFLINE },
+          data: { status: RobotStatus.AVAILABLE },
+        })
+      }
+    } catch (err) {
+      console.error('[mqtt] update connection :',
+        err instanceof Error ? err.message : err)
+    }
+    // TODO websocket : relay robot_online / robot_offline aux clients
   }
 
   // mission/ack — accepted: on attache le robot a la mission.

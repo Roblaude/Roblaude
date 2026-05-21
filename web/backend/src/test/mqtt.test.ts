@@ -23,7 +23,10 @@ vi.mock('mqtt', () => ({
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
     mission: { update: vi.fn().mockResolvedValue({}) },
-    robot: { update: vi.fn().mockResolvedValue({}) },
+    robot: {
+      update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
     // $transaction recoit un tableau de promesses Prisma et resout dans l'ordre.
     $transaction: vi.fn((ops: unknown[]) => Promise.all(ops)),
   },
@@ -313,5 +316,62 @@ describe('RobotMqttAdapter — handlers mission/result', () => {
     })
     await Promise.resolve()
     expect(prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+})
+
+describe('RobotMqttAdapter — handlers telemetry/battery, status, connection (T4.2.9)', () => {
+  beforeEach(() => {
+    prismaMock.robot.update.mockClear()
+    prismaMock.robot.updateMany.mockClear()
+    robotMqtt.disconnect()
+    robotMqtt.connect()
+  })
+
+  it('telemetry/battery met a jour Robot.battery (percent)', async () => {
+    deliver('roblaude/3/telemetry/battery', { voltage: 11.7, percent: 67, charging: false })
+    await Promise.resolve()
+    expect(prismaMock.robot.update).toHaveBeenCalledWith({
+      where: { id: 3 },
+      data: { battery: 67 },
+    })
+  })
+
+  it('telemetry/battery avec percent hors borne est ignore', async () => {
+    deliver('roblaude/3/telemetry/battery', { percent: 150 })
+    await Promise.resolve()
+    expect(prismaMock.robot.update).not.toHaveBeenCalled()
+  })
+
+  it('status met a jour Robot.status', async () => {
+    deliver('roblaude/3/status', { state: 'BUSY' })
+    await Promise.resolve()
+    expect(prismaMock.robot.update).toHaveBeenCalledWith({
+      where: { id: 3 },
+      data: { status: 'BUSY' },
+    })
+  })
+
+  it('status avec etat inconnu est ignore', async () => {
+    deliver('roblaude/3/status', { state: 'FLYING' })
+    await Promise.resolve()
+    expect(prismaMock.robot.update).not.toHaveBeenCalled()
+  })
+
+  it('connection online:false force Robot.status a OFFLINE', async () => {
+    deliver('roblaude/3/connection', { online: false })
+    await Promise.resolve()
+    expect(prismaMock.robot.update).toHaveBeenCalledWith({
+      where: { id: 3 },
+      data: { status: 'OFFLINE' },
+    })
+  })
+
+  it('connection online:true restaure AVAILABLE si etait OFFLINE', async () => {
+    deliver('roblaude/3/connection', { online: true })
+    await Promise.resolve()
+    expect(prismaMock.robot.updateMany).toHaveBeenCalledWith({
+      where: { id: 3, status: 'OFFLINE' },
+      data: { status: 'AVAILABLE' },
+    })
   })
 })

@@ -36,7 +36,7 @@ def generate_launch_description():
                 'odom_frame': 'odom',
                 'base_frame': 'base_link',
                 'map_frame': 'map',
-                'scan_topic': '/scan_stamped',   # timestamps reparees par scan_restamper
+                'scan_topic': '/scan_multi',     # fusion /scan0+/scan1 par ira_laser_tools (lance par base_bringup)
                 'mode': 'mapping',               # 'mapping' ou 'localization'
                 'resolution': 0.05,              # 5 cm par pixel
                 'max_laser_range': 8.0,          # metres (YDLidar)

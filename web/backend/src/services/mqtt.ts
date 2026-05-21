@@ -58,6 +58,15 @@ const batterySchema = z.object({
   charging: z.boolean().optional(),
 })
 
+// telemetry/position (spec §5.1) — pose 2D du robot (frame map ou odom)
+const positionSchema = z.object({
+  timestamp: z.string().datetime(),
+  x: z.number(),
+  y: z.number(),
+  theta: z.number().optional(),
+  frame: z.string().optional(),
+})
+
 // status — le robot publie son etat applicatif (spec §5.3).
 // OFFLINE n'est pas publie par le robot lui-meme : c'est deduit du Last Will
 // sur le topic connection (cf. handleConnection).
@@ -195,8 +204,7 @@ class RobotMqttAdapter {
     switch (family) {
       case 'telemetry':
         if (sub === 'battery') void this.handleBattery(robotId, data)
-        // TODO #80 : sub === 'position' -> Robot.positionX/Y/heading (throttle)
-        // TODO websocket relay : battery_update / position_update
+        else if (sub === 'position') void this.handlePosition(robotId, data)
         break
       case 'status':
         void this.handleStatus(robotId, data)
@@ -236,6 +244,30 @@ class RobotMqttAdapter {
       console.error('[mqtt] update battery :',
         err instanceof Error ? err.message : err)
     }
+  }
+
+  // telemetry/position — pose 2D du robot. Le bridge throttle deja a 1Hz
+  // cote robot (#71), pas de throttle additionnel cote backend.
+  private async handlePosition(robotId: number, data: Record<string, unknown>) {
+    const parsed = positionSchema.safeParse(data)
+    if (!parsed.success) {
+      console.warn('[mqtt] telemetry/position rejete :', parsed.error.issues)
+      return
+    }
+    try {
+      await prisma.robot.update({
+        where: { id: robotId },
+        data: {
+          positionX: parsed.data.x,
+          positionY: parsed.data.y,
+          heading: parsed.data.theta ?? null,
+        },
+      })
+    } catch (err) {
+      console.error('[mqtt] update position :',
+        err instanceof Error ? err.message : err)
+    }
+    // TODO websocket : relay position_update aux clients
   }
 
   // status — etat applicatif (AVAILABLE / BUSY / ERROR).

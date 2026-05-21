@@ -26,6 +26,10 @@ export FASTDDS_BUILTIN_TRANSPORTS="${FASTDDS_BUILTIN_TRANSPORTS:-UDPv4}"
 
 mkdir -p "$MAPS_DIR" /tmp/roslogs
 
+# --- Deps Python non incluses dans l'image Docker Yahboom ---
+# paho-mqtt manque (necessaire pour roblaude_mqtt). pip install idempotent.
+python3 -c "import paho.mqtt" 2>/dev/null || pip install --quiet --user 'paho-mqtt~=1.6'
+
 # --- Source de l'env ROS et des drivers Yahboom (dans l'image, jamais wipes) ---
 source /opt/ros/humble/setup.bash
 [ -f "$YAHBOOM_WS/install/setup.bash" ] && source "$YAHBOOM_WS/install/setup.bash"

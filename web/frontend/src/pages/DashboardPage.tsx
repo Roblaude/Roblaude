@@ -4,6 +4,7 @@ import { useRobotStore, type RobotStatus } from '../stores/robotStore'
 import { useMissionStore } from '../stores/missionStore'
 import { useAuthStore } from '../stores/authStore'
 import { StatusBadge } from '../components/StatusBadge'
+import { RobotMap } from '../components/RobotMap'
 import {
   ArrowRight,
   Battery,
@@ -192,6 +193,14 @@ export function DashboardPage() {
                 unit="°"
                 faded={!connected}
               />
+            </div>
+
+            {/* Carte 2D — position live du robot */}
+            <div className="mt-2">
+              <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground mb-2">
+                · Carte position
+              </p>
+              <RobotMap />
             </div>
           </div>
         </section>

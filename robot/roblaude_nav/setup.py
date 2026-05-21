@@ -28,6 +28,7 @@ setup(
         'console_scripts': [
             'scan_restamper = roblaude_nav.scan_restamper:main',
             'odom_to_tf = roblaude_nav.odom_to_tf:main',
+            'mission_executor = roblaude_nav.mission_executor:main',
         ],
     },
 )

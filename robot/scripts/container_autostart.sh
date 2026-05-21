@@ -96,6 +96,16 @@ else
     echo "[autostart] roblaude_mqtt pas encore build, bridge non lance"
 fi
 
+# --- 4) mission_executor — recoit cmd MQTT et drive Nav2 ---
+# Necessite Nav2 (pas lance par defaut, juste base_bringup + URDF). Pour la
+# demo : lancer slam.launch.py + nav2.launch.py manuellement, puis le robot
+# repond aux commandes mission/cancel/resume/loading-confirmed/emergency-stop.
+if [ -f "$ROBLAUDE_WS/install/roblaude_nav/lib/roblaude_nav/mission_executor" ]; then
+    spawn_once mission_executor ros2 run roblaude_nav mission_executor
+else
+    echo "[autostart] roblaude_nav.mission_executor pas encore build, skip"
+fi
+
 echo "[autostart] tout lance. Logs : /tmp/roslogs/*.log"
 echo "[autostart] verif : ros2 topic list | head"
 

@@ -9,14 +9,21 @@
 # disponibles.
 
 import json
+import math
+import time
 from datetime import datetime, timezone
 
 import paho.mqtt.client as mqtt
 import rclpy
+from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from std_msgs.msg import Float32, String
 
 SCHEMA_VERSION = 1
+
+# Throttle position : on republie au max a cette frequence (le bridge MQTT
+# n'a pas besoin de toute la donnee odom haute-frequence pour l'UI web).
+POSITION_PUBLISH_PERIOD_S = 1.0
 
 # Batterie Li-Ion 3S du ROSMASTER M3 PRO : ~10.0 V vide, ~12.6 V plein
 BATTERY_EMPTY_V = 10.0
@@ -61,9 +68,11 @@ class MqttBridge(Node):
         }
 
         # --- Subscribers ROS 2 : graphe ROS -> telemetrie/mission MQTT ---
-        # Position : encore placeholder, sera branchee sur /odom ou /amcl_pose
-        # quand T3.2.8 (publication position) sera prete.
-        self.create_subscription(String, 'robot/position', self._on_position, 10)
+        # Position : /odom (nav_msgs/Odometry) — toujours dispo des que base_bringup
+        # tourne. Plus tard on pourra basculer sur /amcl_pose (plus precis avec
+        # carte chargee) en gardant /odom en fallback.
+        self._last_position_publish = 0.0
+        self.create_subscription(Odometry, '/odom', self._on_odom, 10)
         # Batterie : /battery est le topic Yahboom standard (YB_Node), Float32
         # = tension en volts. On en deduit le pourcentage cote bridge.
         self.create_subscription(Float32, '/battery', self._on_battery, 10)
@@ -182,8 +191,26 @@ class MqttBridge(Node):
         self._publish(mqtt_topic, payload, qos=qos, retain=retain)
 
     # Les QoS et le flag retain sont definis dans docs/mqtt-spec.md.
-    def _on_position(self, msg):        # T4.1.3
-        self._forward_json(msg, 'telemetry/position', qos=0, retain=True)
+    def _on_odom(self, msg):            # T4.1.3 — Odometry (nav_msgs) -> telemetry/position
+        # Throttle : /odom publie a 50-100 Hz cote bringup, l'UI web n'en a
+        # pas besoin a cette frequence (1 Hz suffit pour suivre le robot).
+        now = time.monotonic()
+        if now - self._last_position_publish < POSITION_PUBLISH_PERIOD_S:
+            return
+        self._last_position_publish = now
+
+        # Quaternion (geometry_msgs) -> yaw (theta) — formule classique ZYX.
+        q = msg.pose.pose.orientation
+        siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
+        cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        theta = math.atan2(siny_cosp, cosy_cosp)
+
+        self._publish('telemetry/position', {
+            'x': round(msg.pose.pose.position.x, 3),
+            'y': round(msg.pose.pose.position.y, 3),
+            'theta': round(theta, 3),
+            'frame': msg.header.frame_id or 'odom',
+        }, qos=0, retain=True)
 
     def _on_battery(self, msg):         # T4.1.10 — /battery (Float32) = tension Yahboom
         voltage = float(msg.data)

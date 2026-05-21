@@ -17,6 +17,7 @@
   <exec_depend>rclpy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
   <!-- paho-mqtt : pip install paho-mqtt (pas de paquet rosdep stable) -->
 
   <test_depend>ament_copyright</test_depend>

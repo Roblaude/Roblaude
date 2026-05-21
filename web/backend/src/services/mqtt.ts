@@ -9,15 +9,23 @@ import prisma from '../lib/prisma'
 
 const SCHEMA_VERSION = 1
 
-// Payloads attendus depuis le robot (spec §5.4)
+// Payloads attendus depuis le robot (spec §4 + §5.4)
+// timestamp ISO-8601 obligatoire sur tous les messages.
+// reason obligatoire si rejected/failed (spec §5.4 — Copilot review #218).
+
 const missionAckSchema = z.object({
   messageId: z.string().min(1),
+  timestamp: z.string().datetime(),
   missionId: z.number().int().positive(),
   result: z.enum(['accepted', 'rejected']),
   reason: z.string().optional(),
-})
+}).refine(
+  (d) => d.result !== 'rejected' || (d.reason !== undefined && d.reason.length > 0),
+  { message: 'reason est obligatoire si result === "rejected"', path: ['reason'] },
+)
 
 const missionStatusSchema = z.object({
+  timestamp: z.string().datetime(),
   missionId: z.number().int().positive(),
   state: z.nativeEnum(MissionStatus),
   progress: z.number().min(0).max(1).optional(),
@@ -25,10 +33,14 @@ const missionStatusSchema = z.object({
 
 const missionResultSchema = z.object({
   messageId: z.string().min(1),
+  timestamp: z.string().datetime(),
   missionId: z.number().int().positive(),
   result: z.enum(['completed', 'failed', 'cancelled']),
   reason: z.string().optional(),
-})
+}).refine(
+  (d) => d.result !== 'failed' || (d.reason !== undefined && d.reason.length > 0),
+  { message: 'reason est obligatoire si result === "failed"', path: ['reason'] },
+)
 
 // Mapping result -> MissionStatus Prisma
 const RESULT_TO_STATUS = {

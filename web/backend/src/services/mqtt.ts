@@ -263,11 +263,17 @@ class RobotMqttAdapter {
           heading: parsed.data.theta ?? null,
         },
       })
+      wsRelay.broadcast({
+        type: 'position_update',
+        robotId,
+        x: parsed.data.x,
+        y: parsed.data.y,
+        theta: parsed.data.theta,
+      })
     } catch (err) {
       console.error('[mqtt] update position :',
         err instanceof Error ? err.message : err)
     }
-    // TODO websocket : relay position_update aux clients
   }
 
   // status — etat applicatif (AVAILABLE / BUSY / ERROR).

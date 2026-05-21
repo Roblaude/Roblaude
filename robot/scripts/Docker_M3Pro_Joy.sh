@@ -27,6 +27,9 @@ xhost +local:root >/dev/null 2>&1 || true
 # Repertoires hote persistants (jetson est owner, pas de sudo)
 mkdir -p /home/jetson/roblaude_ws/scripts
 mkdir -p /home/jetson/robot_maps
+# pip --user installe dans /root/.local cote container. Bind-mount sur l'hote
+# pour persister les deps Python (paho-mqtt...) entre recreate container.
+mkdir -p /home/jetson/.local
 # /etc/roblaude est cree par install_persistence.sh (sudo). On ne tente pas
 # mkdir ici : si le dossier n'existe pas, le bind-mount echouera silencieusement
 # (read-only) et BROKER_HOST=localhost fallback dans le container.
@@ -58,6 +61,7 @@ docker run -d \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
   -v /home/jetson/roblaude_ws:/root/roblaude_ws \
   -v /home/jetson/robot_maps:/root/maps \
+  -v /home/jetson/.local:/root/.local \
   -v /etc/roblaude:/etc/roblaude:ro \
   --device=/dev/bus/usb \
   --device=/dev/input \

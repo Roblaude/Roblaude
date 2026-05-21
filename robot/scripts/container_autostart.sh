@@ -27,16 +27,16 @@ export FASTDDS_BUILTIN_TRANSPORTS="${FASTDDS_BUILTIN_TRANSPORTS:-UDPv4}"
 mkdir -p "$MAPS_DIR" /tmp/roslogs
 
 # --- Deps Python non incluses dans l'image Docker Yahboom ---
-# paho-mqtt manque (necessaire pour roblaude_mqtt). pip install idempotent.
-# Non persiste entre recreate container (pip --user va dans /root/.local), donc
-# on rejoue a chaque autostart — idempotent et rapide (0.5s si deja la).
-SKIP_MQTT=0
+# paho-mqtt manque (necessaire pour roblaude_mqtt). Installe la premiere fois
+# dans /root/.local (= /home/jetson/.local cote hote via bind-mount), donc
+# persiste entre recreate container — pip install ne tourne qu'une seule fois.
 if ! python3 -c "import paho.mqtt" 2>/dev/null; then
     echo "[autostart] installation paho-mqtt..."
-    if ! pip install --quiet --user 'paho-mqtt~=1.6'; then
-        echo "[autostart] ECHEC pip install paho-mqtt — bridge MQTT desactive"
-        SKIP_MQTT=1
-    fi
+    pip install --quiet --user 'paho-mqtt~=1.6' || {
+        echo "[autostart] ECHEC pip install paho-mqtt"
+        echo "[autostart] le robot doit avoir internet au premier boot (ou pre-installer la dep)"
+        exit 1
+    }
 fi
 
 # --- Source de l'env ROS et des drivers Yahboom (dans l'image, jamais wipes) ---
@@ -90,9 +90,7 @@ spawn_once rsp ros2 launch yahboom_M3Pro_description display_launch.py
 sleep 2
 
 # --- 3) Bridge MQTT (lit /etc/roblaude/broker_ip pour le host) ---
-if [ "$SKIP_MQTT" = 1 ]; then
-    echo "[autostart] bridge MQTT skip — paho-mqtt indisponible"
-elif [ -f "$ROBLAUDE_WS/install/roblaude_mqtt/share/roblaude_mqtt/launch/mqtt_bridge.launch.py" ]; then
+if [ -f "$ROBLAUDE_WS/install/roblaude_mqtt/share/roblaude_mqtt/launch/mqtt_bridge.launch.py" ]; then
     spawn_once mqtt_bridge ros2 launch roblaude_mqtt mqtt_bridge.launch.py "broker_host:=$BROKER_HOST"
 else
     echo "[autostart] roblaude_mqtt pas encore build, bridge non lance"

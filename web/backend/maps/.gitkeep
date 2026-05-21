@@ -1,0 +1,6 @@
+# Dossier des cartes SLAM. Format produit par nav2_map_server map_saver_cli :
+#   <robot-id>.pgm    image niveaux de gris (raw P5)
+#   <robot-id>.yaml   metadata (resolution m/px, origin x/y/theta, thresholds)
+# Procedure :
+#   ssh jetson@<robot> "docker exec m3pro ros2 run nav2_map_server map_saver_cli -f /root/maps/1"
+#   scp jetson@<robot>:/home/jetson/robot_maps/1.{pgm,yaml} web/backend/maps/

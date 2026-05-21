@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { asyncHandler } from '../middleware/errorHandler'
-import { listMissions, getMission, createMission, cancelMission } from '../controllers/missionsController'
+import { listMissions, getMission, createMission, cancelMission, resumeMission } from '../controllers/missionsController'
 
 const router = Router()
 
@@ -15,5 +15,8 @@ router.post('/', asyncHandler(createMission))
 
 // POST /api/missions/:id/cancel
 router.post('/:id/cancel', asyncHandler(cancelMission))
+
+// POST /api/missions/:id/resume — relance une mission PAUSED
+router.post('/:id/resume', asyncHandler(resumeMission))
 
 export default router

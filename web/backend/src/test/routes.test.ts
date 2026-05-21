@@ -37,6 +37,11 @@ describe('Routes protegees (sans token = 401)', () => {
     const res = await request(app).get('/api/robots/1/status')
     expect(res.status).toBe(401)
   })
+
+  it('POST /api/missions/1/resume → 401', async () => {
+    const res = await request(app).post('/api/missions/1/resume').send({})
+    expect(res.status).toBe(401)
+  })
 })
 
 describe('Routes publiques', () => {

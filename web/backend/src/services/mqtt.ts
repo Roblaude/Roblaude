@@ -45,26 +45,42 @@ export type CmdAction =
   | 'loading-confirmed'
   | 'emergency-stop'
 
+// Duree de vie d'un messageId dans le cache d'idempotence. Au-dela, le retry
+// du robot est traite comme un nouveau message. Le robot ne doit pas retry
+// au-dela de cette fenetre (sinon double traitement) — la spec MQTT QoS 2
+// garantit que le broker ne livre pas deux fois en moins de quelques minutes.
+const SEEN_MESSAGE_TTL_MS = 60 * 60 * 1000 // 1 heure
+
 class RobotMqttAdapter {
   private client: MqttClient | null = null
   // messageIds deja traites pour les evenements (cf. spec §4 — idempotence).
-  // In-memory : on perd le set au restart, le robot peut rejouer un ack ; en
-  // pratique l'update Prisma reste idempotent (meme statut ecrit deux fois).
-  private seenMessageIds = new Set<string>()
+  // Map<messageId, expireAt>. TTL pour eviter fuite memoire sur long uptime
+  // (bug Copilot #218 — la demo soutenance tournera 8h).
+  private seenMessageIds = new Map<string, number>()
+
+  /** Purge les messageIds expires. Appele a chaque add. */
+  private purgeExpiredMessageIds(now: number = Date.now()): void {
+    for (const [id, expireAt] of this.seenMessageIds) {
+      if (expireAt <= now) this.seenMessageIds.delete(id)
+    }
+  }
 
   /**
    * Execute fn() une seule fois par messageId.
    * - Marque immediatement (synchrone) pour que deux deliveries concurrentes
    *   du meme messageId ne lancent pas deux fn() en parallele.
-   * - Si fn() throw, on retire le messageId du set : un retry du robot pourra
+   * - Si fn() throw, on retire le messageId du cache : un retry du robot pourra
    *   retenter (sinon un hoquet DB bloquait definitivement — bug Copilot #218).
+   * - Expire apres SEEN_MESSAGE_TTL_MS.
    */
   private async withIdempotence(
     messageId: string,
     fn: () => Promise<void>,
   ): Promise<void> {
+    const now = Date.now()
+    this.purgeExpiredMessageIds(now)
     if (this.seenMessageIds.has(messageId)) return
-    this.seenMessageIds.add(messageId)
+    this.seenMessageIds.set(messageId, now + SEEN_MESSAGE_TTL_MS)
     try {
       await fn()
     } catch (err) {

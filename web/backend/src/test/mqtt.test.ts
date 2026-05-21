@@ -145,6 +145,26 @@ describe('RobotMqttAdapter — handlers mission/ack & mission/status', () => {
     expect(prismaMock.mission.update).toHaveBeenCalledTimes(1)
   })
 
+  it('mission/ack — un messageId expire est re-traite (TTL 1h)', async () => {
+    // On avance Date.now de 2h pour simuler l'expiration
+    const realNow = Date.now
+    Date.now = () => realNow.call(Date)
+
+    const payload = { messageId: 'm-old', missionId: 42, result: 'accepted' as const }
+    deliver('roblaude/3/mission/ack', payload)
+    await Promise.resolve()
+    expect(prismaMock.mission.update).toHaveBeenCalledTimes(1)
+
+    // 2h plus tard, le robot rejoue le meme messageId (cas peu probable mais
+    // notre TTL doit le laisser passer comme un nouveau message)
+    Date.now = () => realNow.call(Date) + 2 * 60 * 60 * 1000
+    deliver('roblaude/3/mission/ack', payload)
+    await Promise.resolve()
+    expect(prismaMock.mission.update).toHaveBeenCalledTimes(2)
+
+    Date.now = realNow
+  })
+
   it('mission/ack — un echec Prisma ne consomme pas le messageId (retry OK)', async () => {
     prismaMock.mission.update
       .mockRejectedValueOnce(new Error('DB transitoire'))

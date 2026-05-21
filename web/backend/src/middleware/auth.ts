@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken'
 // Pas de valeur par defaut : un secret en dur dans le code serait public
 // (visible sur GitHub) et permettrait de forger des tokens. Si la variable
 // est absente, le serveur refuse de demarrer.
-function getJwtSecret(): string {
+export function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET
   if (!secret) {
     throw new Error(

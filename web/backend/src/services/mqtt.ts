@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { MissionStatus, RobotStatus } from '@prisma/client'
 import { z } from 'zod'
 import prisma from '../lib/prisma'
+import { wsRelay } from './websocket'
 
 // Adaptateur MQTT du backend — singleton.
 // Topics et formats : voir docs/mqtt-spec.md
@@ -226,11 +227,15 @@ class RobotMqttAdapter {
         where: { id: robotId },
         data: { battery: parsed.data.percent },
       })
+      wsRelay.broadcast({
+        type: 'battery_update',
+        robotId,
+        percent: parsed.data.percent,
+      })
     } catch (err) {
       console.error('[mqtt] update battery :',
         err instanceof Error ? err.message : err)
     }
-    // TODO websocket : relay battery_update aux clients
   }
 
   // status — etat applicatif (AVAILABLE / BUSY / ERROR).
@@ -246,11 +251,15 @@ class RobotMqttAdapter {
         where: { id: robotId },
         data: { status: parsed.data.state as RobotStatus },
       })
+      wsRelay.broadcast({
+        type: 'status_change',
+        robotId,
+        status: parsed.data.state,
+      })
     } catch (err) {
       console.error('[mqtt] update status :',
         err instanceof Error ? err.message : err)
     }
-    // TODO websocket : relay status_change aux clients
   }
 
   // connection — presence du robot via le Last Will MQTT.
@@ -269,18 +278,18 @@ class RobotMqttAdapter {
           where: { id: robotId },
           data: { status: RobotStatus.OFFLINE },
         })
+        wsRelay.broadcast({ type: 'robot_offline', robotId })
       } else {
-        // Restore conditionnel : on ne touche que si robot etait OFFLINE
         await prisma.robot.updateMany({
           where: { id: robotId, status: RobotStatus.OFFLINE },
           data: { status: RobotStatus.AVAILABLE },
         })
+        wsRelay.broadcast({ type: 'robot_online', robotId })
       }
     } catch (err) {
       console.error('[mqtt] update connection :',
         err instanceof Error ? err.message : err)
     }
-    // TODO websocket : relay robot_online / robot_offline aux clients
   }
 
   // mission/ack — accepted: on attache le robot a la mission.
@@ -320,11 +329,17 @@ class RobotMqttAdapter {
       console.warn('[mqtt] mission/status rejete :', parsed.error.issues)
       return
     }
-    const { missionId, state } = parsed.data
+    const { missionId, state, progress } = parsed.data
     try {
       await prisma.mission.update({
         where: { id: missionId },
         data: { status: state },
+      })
+      wsRelay.broadcast({
+        type: 'mission_update',
+        missionId,
+        status: state,
+        progress,
       })
     } catch (err) {
       console.error('[mqtt] update mission/status :',
@@ -353,6 +368,17 @@ class RobotMqttAdapter {
           data: { status: RobotStatus.AVAILABLE },
         }),
       ])
+      wsRelay.broadcast({
+        type: 'mission_completed',
+        missionId,
+        result,
+        reason,
+      })
+      wsRelay.broadcast({
+        type: 'status_change',
+        robotId,
+        status: RobotStatus.AVAILABLE,
+      })
     }).catch((err) => {
       // L'echec NE marque PAS le messageId comme vu (cf. withIdempotence)
       console.error('[mqtt] update mission/result :',

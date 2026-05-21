@@ -1,16 +1,59 @@
+import { useState } from 'react'
+import { toast } from 'sonner'
 import { useRobotStore } from '../stores/robotStore'
+import { useMissionStore } from '../stores/missionStore'
+import { apiFetch } from '../lib/api'
 import { Square } from 'lucide-react'
 
 interface Props {
   compact?: boolean
 }
 
-export function StopButton({ compact = false }: Props) {
-  const { status, setStatus } = useRobotStore()
-  const isActive = status !== 'OFFLINE'
+const ACTIVE_MISSION_STATUSES = new Set([
+  'PENDING',
+  'PAUSED',
+  'NAVIGATING_TO_PICKUP',
+  'WAITING_FOR_LOAD',
+  'NAVIGATING_TO_DESTINATION',
+  'DETECTING_OBJECT',
+  'GRASPING',
+  'TRANSPORTING',
+  'DEPOSITING',
+])
 
-  function handleStop() {
-    if (isActive) setStatus('OFFLINE')
+export function StopButton({ compact = false }: Props) {
+  const status = useRobotStore((s) => s.status)
+  const missions = useMissionStore((s) => s.missions)
+  const fetchMissions = useMissionStore((s) => s.fetchMissions)
+  const [pending, setPending] = useState(false)
+  const isActive = status !== 'OFFLINE' && !pending
+
+  async function handleStop() {
+    if (!isActive) return
+    const active = missions.find((m) => ACTIVE_MISSION_STATUSES.has(m.status))
+    if (!active) {
+      toast.info('Aucune mission active à arrêter')
+      return
+    }
+    if (!window.confirm('Confirmer l\'arrêt d\'urgence du robot ?')) return
+    setPending(true)
+    try {
+      const res = await apiFetch(`/missions/${active.id}/stop`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: 'user-pressed-stop' }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Erreur inconnue' }))
+        toast.error(`Échec STOP : ${err.error ?? res.statusText}`)
+        return
+      }
+      toast.warning(`Mission #${active.id} stoppée`)
+      void fetchMissions()
+    } catch (e) {
+      toast.error(`Erreur réseau : ${e instanceof Error ? e.message : 'inconnue'}`)
+    } finally {
+      setPending(false)
+    }
   }
 
   if (compact) {

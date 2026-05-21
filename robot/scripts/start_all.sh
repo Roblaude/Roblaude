@@ -1,18 +1,30 @@
 #!/bin/bash
-# start_all.sh - Lance toute la stack ROS2 de navigation RobLaude
+# start_all.sh - Lance la stack ROS2 RobLaude EN MODE DEBUG MANUEL
 #
-# A lancer DANS le container ROS2 du robot :
-#     docker exec m3pro_main bash /root/roblaude_ws/src/robot/scripts/start_all.sh
+# A utiliser quand l'autostart container_autostart.sh ne convient pas
+# (ex: tu veux pas le bringup auto + bridge MQTT, juste les launch
+# visualisation et SLAM pour cartographier).
 #
-# Prerequis : le package roblaude_nav doit etre compile (colcon build)
-# dans $ROBLAUDE_WS.
+# Pour le mode prod auto-au-boot, c'est container_autostart.sh qui prend
+# la main via Docker_M3Pro_Joy.sh.
+#
+# Appel cote Mac (via start_robot.sh) :
+#   docker exec m3pro bash /root/roblaude_ws/scripts/start_all.sh
+#
+# Prerequis : roblaude_nav et roblaude_mqtt compiles dans $ROBLAUDE_WS.
 
 set -u
 
 export ROS_DOMAIN_ID=30
 ROBLAUDE_WS="${ROBLAUDE_WS:-/root/roblaude_ws}"
 YAHBOOM_WS="${YAHBOOM_WS:-/root/yahboomcar_ws}"
+BROKER_IP_FILE="${BROKER_IP_FILE:-/etc/roblaude/broker_ip}"
 mkdir -p /tmp/roslogs
+
+BROKER_HOST="localhost"
+if [ -r "$BROKER_IP_FILE" ]; then
+    BROKER_HOST="$(cat "$BROKER_IP_FILE" | tr -d '[:space:]')"
+fi
 
 # PIDs des process lances, pour la verification finale
 declare -A LAUNCH_PIDS
@@ -38,6 +50,7 @@ pkill -f web_video_server   2>/dev/null || true
 pkill -f async_slam_toolbox 2>/dev/null || true
 pkill -f scan_restamper     2>/dev/null || true
 pkill -f odom_to_tf         2>/dev/null || true
+pkill -f mqtt_bridge        2>/dev/null || true
 sleep 2
 
 # 1) Bridges de visualisation (package roblaude_nav)
@@ -60,6 +73,9 @@ sleep 8
 
 # 5) SLAM (utilise /scan_stamped)
 launch_bg slam      "ros2 launch roblaude_nav slam.launch.py"
+
+# 6) Bridge MQTT (broker_host depuis /etc/roblaude/broker_ip)
+launch_bg mqtt      "ros2 launch roblaude_mqtt mqtt_bridge.launch.py broker_host:=$BROKER_HOST"
 
 # Verification : chaque process est-il toujours vivant 3s apres lancement ?
 sleep 3

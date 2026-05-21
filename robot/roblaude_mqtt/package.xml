@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>roblaude_mqtt</name>
+  <version>0.1.0</version>
+  <description>
+    Pont MQTT &lt;-&gt; ROS 2 pour RobLaude. Seul point d'entree des commandes
+    externes sur le robot : traduit les ordres du serveur en topics ROS 2 et
+    remonte la telemetrie du robot vers le broker MQTT.
+    Contrat de communication : docs/mqtt-spec.md.
+  </description>
+  <maintainer email="wissemkarboub@gmail.com">Wissem</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <!-- paho-mqtt : pip install paho-mqtt (pas de paquet rosdep stable) -->
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

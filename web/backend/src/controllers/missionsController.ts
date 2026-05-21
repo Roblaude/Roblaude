@@ -223,6 +223,12 @@ export async function cancelMission(req: Request, res: Response) {
   res.json({ data: updated })
 }
 
+// Sentinels typees pour transporter une erreur depuis la transaction
+type ResumeError = { code: 404 | 400; body: object }
+function isResumeError(x: unknown): x is ResumeError {
+  return typeof x === 'object' && x !== null && 'code' in x && 'body' in x
+}
+
 export async function resumeMission(req: Request, res: Response) {
   const id = parseInt(req.params.id, 10)
   if (isNaN(id)) {
@@ -230,39 +236,51 @@ export async function resumeMission(req: Request, res: Response) {
     return
   }
 
-  const mission = await prisma.mission.findUnique({ where: { id } })
-  if (!mission) {
-    res.status(404).json({ error: 'Mission introuvable' })
-    return
-  }
-  if (mission.status !== MissionStatus.PAUSED) {
-    res.status(400).json({ error: 'Mission non reprenable', status: mission.status })
-    return
-  }
-  if (!mission.robotId) {
-    res.status(400).json({ error: 'Aucun robot assigne a la mission' })
-    return
-  }
+  // Tous les checks DANS la transaction pour eviter la race entre
+  // findUnique et le robot.update (Copilot #218 — la mission peut etre
+  // annulee ou son robot reassigne entre les deux).
+  let robotIdForCommand: number
+  try {
+    const updated = await prisma.$transaction(async (tx) => {
+      const mission = await tx.mission.findUnique({ where: { id } })
+      if (!mission) throw { code: 404, body: { error: 'Mission introuvable' } } satisfies ResumeError
+      if (mission.status !== MissionStatus.PAUSED) {
+        throw { code: 400, body: { error: 'Mission non reprenable', status: mission.status } } satisfies ResumeError
+      }
+      if (!mission.robotId) {
+        throw { code: 400, body: { error: 'Aucun robot assigne a la mission' } } satisfies ResumeError
+      }
 
-  // Robot repasse BUSY. Mission.status sera mis a jour par le robot via
-  // mission/status apres reprise (le robot connait son sous-etat reel).
-  const updated = await prisma.$transaction(async (tx) => {
-    await tx.robot.update({
-      where: { id: mission.robotId! },
-      data: { status: RobotStatus.BUSY },
+      await tx.robot.update({
+        where: { id: mission.robotId },
+        data: { status: RobotStatus.BUSY },
+      })
+
+      const reloaded = await tx.mission.findUnique({
+        where: { id },
+        include: {
+          fromPoint: true,
+          toPoint: true,
+          robot: { select: { id: true, name: true, status: true } },
+          user: { select: { id: true, name: true, email: true } },
+        },
+      })
+      // Theoriquement impossible (on vient de findUnique ci-dessus dans la
+      // meme transaction), mais on garde-fou plutot que renvoyer 200 + null.
+      if (!reloaded) throw { code: 404, body: { error: 'Mission disparue en cours de transaction' } } satisfies ResumeError
+
+      robotIdForCommand = mission.robotId
+      return reloaded
     })
-    return tx.mission.findUnique({
-      where: { id },
-      include: {
-        fromPoint: true,
-        toPoint: true,
-        robot: { select: { id: true, name: true, status: true } },
-        user: { select: { id: true, name: true, email: true } },
-      },
-    })
-  })
 
-  robotMqtt.publishCommand(mission.robotId, 'resume', { missionId: id })
-
-  res.json({ data: updated })
+    // Publish APRES commit reussi (sinon on commande au robot pour rien)
+    robotMqtt.publishCommand(robotIdForCommand!, 'resume', { missionId: id })
+    res.json({ data: updated })
+  } catch (err) {
+    if (isResumeError(err)) {
+      res.status(err.code).json(err.body)
+      return
+    }
+    throw err
+  }
 }

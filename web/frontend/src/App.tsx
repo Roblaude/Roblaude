@@ -40,6 +40,7 @@ export default function App() {
             />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/mapping" element={<MappingPage />} />
+            <Route path="/mapping/:robotId" element={<MappingPage />} />
             <Route
               path="/admin/ssh"
               element={role === 'ADMIN' ? <AdminSshPage /> : <Navigate to="/" replace />}

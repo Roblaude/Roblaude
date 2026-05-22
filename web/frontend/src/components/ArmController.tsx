@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
-import { Bot, Send, RotateCcw, AlertTriangle } from 'lucide-react'
+import { Bot, Send, RotateCcw, AlertTriangle, Power, PowerOff, Crosshair } from 'lucide-react'
 import { toast } from 'sonner'
-import { commandArm, type ArmCommand } from '@/lib/armApi'
+import { commandArm, commandArmPreset, type ArmCommand, type ArmPresetName } from '@/lib/armApi'
 
 // Controle direct du bras 6-DOF Yahboom M3 Pro.
 // joint1..5 : axes du bras (-180..180 degres)
@@ -69,6 +69,28 @@ export function ArmController({ robotId }: Props) {
     void send(REST_POSE)
   }
 
+  const applyPreset = useCallback(async (preset: ArmPresetName): Promise<void> => {
+    if (!armed) {
+      toast.warning('Active "ARMÉ" pour appliquer un preset au vrai bras')
+      return
+    }
+    setBusy(true)
+    try {
+      const sent = await commandArmPreset(robotId, preset)
+      // sync l'UI avec ce qu'on a envoye (sauf time, le slider ne le gere pas)
+      setPose({
+        joint1: sent.joint1, joint2: sent.joint2, joint3: sent.joint3,
+        joint4: sent.joint4, joint5: sent.joint5, joint6: sent.joint6,
+      })
+      const label = preset === 'startup' ? 'Démarrage' : preset === 'shutdown' ? 'Rangement' : 'Vertical (référence)'
+      toast.success(`Preset "${label}" envoyé`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : `erreur preset ${preset}`)
+    } finally {
+      setBusy(false)
+    }
+  }, [armed, robotId])
+
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
@@ -131,7 +153,7 @@ export function ArmController({ robotId }: Props) {
         />
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 mb-2">
         <button
           onClick={() => void send(pose)}
           disabled={busy || !armed}
@@ -143,10 +165,43 @@ export function ArmController({ robotId }: Props) {
           onClick={resetPose}
           disabled={busy || !armed}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-gray-200 text-xs rounded font-medium"
-          title="Pose repos : tous joints à 0, pince à 90"
+          title="Pose repos manuelle : tous joints à 0, pince à 90"
         >
           <RotateCcw className="w-3 h-3" /> Repos
         </button>
+      </div>
+
+      {/* Presets calibres par rapport au repere physique "bras vertical" */}
+      <div className="border-t border-gray-800 pt-2">
+        <div className="text-[10px] text-gray-500 mb-1.5 font-mono uppercase tracking-wider">
+          Poses prédéfinies
+        </div>
+        <div className="grid grid-cols-3 gap-1">
+          <button
+            onClick={() => void applyPreset('startup')}
+            disabled={busy || !armed}
+            className="flex items-center justify-center gap-1 px-2 py-1.5 bg-green-700 hover:bg-green-600 disabled:bg-gray-800 disabled:text-gray-600 text-white text-[10px] rounded font-medium"
+            title="Pose au démarrage : bras prêt à travailler (légèrement plié vers l'avant)"
+          >
+            <Power className="w-3 h-3" /> Démarrage
+          </button>
+          <button
+            onClick={() => void applyPreset('vertical')}
+            disabled={busy || !armed}
+            className="flex items-center justify-center gap-1 px-2 py-1.5 bg-cyan-700 hover:bg-cyan-600 disabled:bg-gray-800 disabled:text-gray-600 text-white text-[10px] rounded font-medium"
+            title="Référence physique : bras tout droit vertical comme un pic"
+          >
+            <Crosshair className="w-3 h-3" /> Vertical
+          </button>
+          <button
+            onClick={() => void applyPreset('shutdown')}
+            disabled={busy || !armed}
+            className="flex items-center justify-center gap-1 px-2 py-1.5 bg-orange-700 hover:bg-orange-600 disabled:bg-gray-800 disabled:text-gray-600 text-white text-[10px] rounded font-medium"
+            title="Pose au rangement : bras replié sur lui-même, pince fermée"
+          >
+            <PowerOff className="w-3 h-3" /> Rangement
+          </button>
+        </div>
       </div>
     </div>
   )

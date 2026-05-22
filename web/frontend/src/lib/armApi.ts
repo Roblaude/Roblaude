@@ -20,3 +20,17 @@ export async function commandArm(robotId: number, cmd: ArmCommand): Promise<void
     throw new Error(body.error ?? `commandArm ${res.status}`)
   }
 }
+
+export type ArmPresetName = 'startup' | 'shutdown' | 'vertical'
+
+export async function commandArmPreset(robotId: number, preset: ArmPresetName): Promise<ArmCommand> {
+  const res = await apiFetch(`/robots/${robotId}/arm/preset/${preset}`, {
+    method: 'POST',
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error ?? `commandArmPreset ${res.status}`)
+  }
+  const data = await res.json() as { sent: ArmCommand }
+  return data.sent
+}

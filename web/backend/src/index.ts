@@ -5,6 +5,8 @@ import { robotMqtt } from './services/mqtt'
 import { wsRouter } from './services/wsRouter'
 import { wsRelay } from './services/websocket'
 import { wsTelemetry } from './services/wsTelemetry'
+import { wsTf } from './services/wsTf'
+import { wsTopics } from './services/wsTopics'
 
 const PORT = process.env.PORT || 3001
 
@@ -16,6 +18,8 @@ const server = http.createServer(app)
 wsRouter.attach(server)
 wsRelay.register()
 wsTelemetry.register()
+wsTf.register()
+wsTopics.register()
 
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
@@ -28,6 +32,8 @@ function shutdown(signal: string) {
   robotMqtt.disconnect()
   wsRelay.close()
   wsTelemetry.close()
+  wsTf.close()
+  wsTopics.stop()
   server.close(() => process.exit(0))
 }
 

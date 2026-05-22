@@ -7,6 +7,7 @@ import missionsRouter from './routes/missions'
 import pointsRouter from './routes/points'
 import robotsRouter from './routes/robots'
 import mappingRouter from './routes/mapping'
+import annotationsRouter from './routes/annotations'
 
 const app = express()
 
@@ -32,6 +33,7 @@ app.use('/api/missions', authGuard, missionsRouter)
 app.use('/api/points', authGuard, pointsRouter)
 app.use('/api/robots', authGuard, robotsRouter)
 app.use('/api/mapping', authGuard, mappingRouter)
+app.use('/api/annotations', authGuard, annotationsRouter)
 
 // error handler — doit etre en dernier
 app.use(errorHandler)

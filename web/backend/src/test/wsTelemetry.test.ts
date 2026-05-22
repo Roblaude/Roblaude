@@ -2,18 +2,30 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import http from 'node:http'
 import WebSocket from 'ws'
 import jwt from 'jsonwebtoken'
+import { PrismaClient } from '@prisma/client'
 import { wsRouter } from '../services/wsRouter'
 import { wsTelemetry } from '../services/wsTelemetry'
 import { mqttEvents } from '../services/mqttEvents'
 import { robotMqtt } from '../services/mqtt'
 import { getJwtSecret } from '../middleware/auth'
 
+const prisma = new PrismaClient()
+
 let server: http.Server
 let port: number
 let token: string
+let robotIdA: number
+let robotIdB: number
 const openSockets: WebSocket[] = []
 
 beforeAll(async () => {
+  // wsTelemetry verifie l'existence du Robot en DB a l'upgrade — on cree
+  // 2 robots de test (un par room) et on retient leurs ids pour les tests.
+  const a = await prisma.robot.create({ data: { name: `wt-a-${Date.now()}` } })
+  const b = await prisma.robot.create({ data: { name: `wt-b-${Date.now()}` } })
+  robotIdA = a.id
+  robotIdB = b.id
+
   server = http.createServer((_req, res) => res.end('ok'))
   wsRouter.attach(server)
   wsTelemetry.register()
@@ -22,9 +34,12 @@ beforeAll(async () => {
   token = jwt.sign({ userId: 1, email: 'x@x', role: 'USER' }, getJwtSecret(), { expiresIn: '5m' })
 })
 
-afterAll(() => {
+afterAll(async () => {
   wsTelemetry.close()
   server.close()
+  await prisma.robot.delete({ where: { id: robotIdA } }).catch(() => {})
+  await prisma.robot.delete({ where: { id: robotIdB } }).catch(() => {})
+  await prisma.$disconnect()
 })
 
 beforeEach(() => {
@@ -54,24 +69,24 @@ function open(robotId: number): Promise<WebSocket> {
 
 describe('wsTelemetry', () => {
   it('isole les events par robotId (un client recoit son robot uniquement)', async () => {
-    const ws1 = await open(1)
-    const ws2 = await open(2)
+    const ws1 = await open(robotIdA)
+    const ws2 = await open(robotIdB)
     const r1: unknown[] = []
     const r2: unknown[] = []
     ws1.on('message', (d) => r1.push(JSON.parse(d.toString())))
     ws2.on('message', (d) => r2.push(JSON.parse(d.toString())))
-    mqttEvents.emit('mapping_state', { robotId: 1, state: 'RUNNING', sessionId: 99 })
+    mqttEvents.emit('mapping_state', { robotId: robotIdA, state: 'RUNNING', sessionId: 99 })
     await new Promise((r) => setTimeout(r, 50))
     expect(r1.some((m) => (m as { type: string; state: string }).type === 'mapping_state' && (m as { state: string }).state === 'RUNNING')).toBe(true)
     expect(r2.length).toBe(0)
   })
 
   it('recoit le PNG map en frame binary + meta JSON compagnon', async () => {
-    const ws = await open(1)
+    const ws = await open(robotIdA)
     const received: { data: Buffer | string; isBinary: boolean }[] = []
     ws.on('message', (d, isBinary) => received.push({ data: d as Buffer, isBinary }))
     mqttEvents.emit('map_update', {
-      robotId: 1,
+      robotId: robotIdA,
       png: Buffer.from('FAKEPNG'),
       meta: { width: 4, height: 3, resolution: 0.05, originX: 0, originY: 0, stamp: 0 },
     })
@@ -84,7 +99,7 @@ describe('wsTelemetry', () => {
   })
 
   it('teleop client est forwarde sur MQTT avec clamp', async () => {
-    const ws = await open(1)
+    const ws = await open(robotIdA)
     const calls: { id: number; action: string; body: unknown }[] = []
     const orig = robotMqtt.publishCommand.bind(robotMqtt)
     robotMqtt.publishCommand = ((id: number, action: string, body: object) => {
@@ -96,7 +111,7 @@ describe('wsTelemetry', () => {
       ws.send(JSON.stringify({ type: 'teleop', lin: 2.0, ang: -3.0 }))
       await new Promise((r) => setTimeout(r, 50))
       expect(calls).toHaveLength(1)
-      expect(calls[0].id).toBe(1)
+      expect(calls[0].id).toBe(robotIdA)
       expect(calls[0].action).toBe('teleop')
       expect(calls[0].body).toEqual({ lin: 0.5, ang: -1.0 })
     } finally {
@@ -105,8 +120,14 @@ describe('wsTelemetry', () => {
   })
 
   it('refuse upgrade si token absent (401)', async () => {
-    const ws = new WebSocket(`ws://localhost:${port}/ws/robots/1/telemetry`)
+    const ws = new WebSocket(`ws://localhost:${port}/ws/robots/${robotIdA}/telemetry`)
     const err = await new Promise<Error>((res) => ws.on('error', res))
     expect(err.message).toMatch(/401|Unexpected/)
+  })
+
+  it('refuse upgrade si robotId inexistant (404)', async () => {
+    const ws = new WebSocket(`ws://localhost:${port}/ws/robots/999999/telemetry?token=${token}`)
+    const err = await new Promise<Error>((res) => ws.on('error', res))
+    expect(err.message).toMatch(/404|Unexpected/)
   })
 })

@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { asyncHandler } from '../middleware/errorHandler'
 import { listRobots, getRobotStatus } from '../controllers/robotsController'
 import { getMapMetadata, getMapImage } from '../controllers/mapController'
+import { commandArm } from '../controllers/armController'
 
 const router = Router()
 
@@ -16,5 +17,8 @@ router.get('/:id/map', asyncHandler(getMapMetadata))
 
 // GET /api/robots/:id/map.png — image PNG de la carte (cache 30s)
 router.get('/:id/map.png', asyncHandler(getMapImage))
+
+// POST /api/robots/:id/arm — commande bras 6-DOF (5 axes + pince joint6)
+router.post('/:id/arm', asyncHandler(commandArm))
 
 export default router

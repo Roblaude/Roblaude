@@ -24,6 +24,16 @@ from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage, JointState, LaserScan
 from std_msgs.msg import Float32, String
 from tf2_msgs.msg import TFMessage
+
+# arm_msgs vient du workspace Yahboom (/root/yahboomcar_ws). Import optionnel
+# pour que le bridge demarre meme si le workspace Yahboom n'est pas source.
+# Sans arm_msgs, la commande cmd/arm sera juste loggee + ignoree.
+try:
+    from arm_msgs.msg import ArmJoints
+    HAS_ARM_MSGS = True
+except ImportError:
+    ArmJoints = None
+    HAS_ARM_MSGS = False
 from visualization_msgs.msg import MarkerArray
 
 
@@ -122,6 +132,37 @@ def build_joint_states_payload(names, positions) -> dict:
     }
 
 
+# Limites pour cmd/arm (securite avant que le msg ROS atteigne YB_Node).
+# Servos Yahboom M3 Pro = unites entieres int16, range typique -180..180
+# pour les axes, 0..180 pour la pince. Le `time` < 50 ms peut endommager
+# les servos (mouvement trop brusque), > 5000 ms = inutile pour pilotage live.
+ARM_JOINT_MIN = -180
+ARM_JOINT_MAX = 180
+ARM_TIME_MIN_MS = 50
+ARM_TIME_MAX_MS = 5000
+
+
+def validate_arm_command(body: dict) -> tuple:
+    """Renvoie (joints[6], time_ms) si valide, sinon leve ValueError.
+    Pur, testable. Les valeurs sont clampees aux limites de securite."""
+    keys = ('joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6')
+    joints = []
+    for k in keys:
+        if k not in body:
+            raise ValueError(f'champ manquant: {k}')
+        v = body[k]
+        if not isinstance(v, (int, float)):
+            raise ValueError(f'{k} doit etre numerique')
+        # clamp
+        v = max(ARM_JOINT_MIN, min(ARM_JOINT_MAX, int(v)))
+        joints.append(v)
+    time_ms = body.get('time', 500)
+    if not isinstance(time_ms, (int, float)):
+        raise ValueError('time doit etre numerique')
+    time_ms = max(ARM_TIME_MIN_MS, min(ARM_TIME_MAX_MS, int(time_ms)))
+    return joints, time_ms
+
+
 class MqttBridge(Node):
     def __init__(self):
         super().__init__('mqtt_bridge')
@@ -144,6 +185,16 @@ class MqttBridge(Node):
             action: self.create_publisher(String, ros_topic, 10)
             for action, ros_topic in CMD_TO_ROS_TOPIC.items()
         }
+        # Publisher dedie pour le bras Yahboom (type custom arm_msgs/ArmJoints).
+        # YB_Node sub /arm6_joints et applique les angles aux servos.
+        if HAS_ARM_MSGS:
+            self.arm_pub = self.create_publisher(ArmJoints, '/arm6_joints', 10)
+            self.get_logger().info('arm_msgs detecte — cmd/arm activee')
+        else:
+            self.arm_pub = None
+            self.get_logger().warn(
+                'arm_msgs absent (source /root/yahboomcar_ws/install/setup.bash) — cmd/arm ignoree'
+            )
 
         # --- Subscribers ROS 2 : graphe ROS -> telemetrie/mission MQTT ---
         # Position : /odom (nav_msgs/Odometry) — toujours dispo des que base_bringup
@@ -295,6 +346,30 @@ class MqttBridge(Node):
             twist.angular.z = cAng
             self.cmd_vel_pub.publish(twist)
             self.teleop_deadman.feed(cLin, cAng)
+            return
+
+        # Cas 1.5 : cmd/arm -> /arm6_joints (arm_msgs/ArmJoints, type Yahboom)
+        if after_cmd == 'arm':
+            if self.arm_pub is None:
+                self.get_logger().warn('cmd/arm recu mais arm_msgs absent — ignore')
+                return
+            try:
+                joints, time_ms = validate_arm_command(payload)
+            except ValueError as e:
+                self.get_logger().warn(f'cmd/arm rejete : {e}')
+                return
+            msg_arm = ArmJoints()
+            msg_arm.joint1 = joints[0]
+            msg_arm.joint2 = joints[1]
+            msg_arm.joint3 = joints[2]
+            msg_arm.joint4 = joints[3]
+            msg_arm.joint5 = joints[4]
+            msg_arm.joint6 = joints[5]
+            msg_arm.time = time_ms
+            self.arm_pub.publish(msg_arm)
+            self.get_logger().info(
+                f'cmd/arm -> joints={joints} time={time_ms}ms'
+            )
             return
 
         # Cas 2 : cmd/mapping/{start,stop,save} -> /mqtt/cmd/mapping (consomme par supervisor)

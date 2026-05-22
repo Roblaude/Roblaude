@@ -1,4 +1,5 @@
 import express from 'express'
+import path from 'node:path'
 import cors from 'cors'
 import { errorHandler } from './middleware/errorHandler'
 import { authGuard } from './middleware/auth'
@@ -20,6 +21,10 @@ app.use(cors({
 }))
 
 app.use(express.json())
+
+// Assets robot (URDF + meshes STL) — recuperes via robot/scripts/fetch_urdf_from_robot.sh
+// Servi en public car les URDF ne sont pas sensibles (config geometrique uniquement).
+app.use('/robot_assets', express.static(path.resolve(process.cwd(), 'robot_assets')))
 
 // Health check (public) — expose en /health ET /api/health pour le proxy Vite
 const healthHandler = (_req: express.Request, res: express.Response): void => {

@@ -21,10 +21,12 @@ app.use(cors({
 
 app.use(express.json())
 
-// Health check (public)
-app.get('/health', (_req, res) => {
+// Health check (public) — expose en /health ET /api/health pour le proxy Vite
+const healthHandler = (_req: express.Request, res: express.Response): void => {
   res.status(200).json({ status: 'ok' })
-})
+}
+app.get('/health', healthHandler)
+app.get('/api/health', healthHandler)
 
 // Auth routes (public)
 app.use('/api/auth', authRouter)

@@ -30,6 +30,7 @@ setup(
             'odom_to_tf = roblaude_nav.odom_to_tf:main',
             'mission_executor = roblaude_nav.mission_executor:main',
             'initial_rotation = roblaude_nav.initial_rotation:main',
+            'mapping_supervisor = roblaude_nav.mapping_supervisor:main',
         ],
     },
 )

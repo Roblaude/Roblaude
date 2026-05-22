@@ -256,6 +256,28 @@ export function DashboardPage() {
               <ArrowRight className="size-4 group-hover:translate-x-0.5 transition-transform" />
             </div>
           </Link>
+
+          <Link
+            to="/mapping"
+            className="group relative rounded-sm border border-border bg-card/40 hover:bg-card/70
+                       p-5 transition-colors flex flex-col justify-between min-h-[120px] overflow-hidden"
+          >
+            <CornerBrackets />
+            <div className="relative">
+              <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground mb-1">
+                · Mode mapping
+              </p>
+              <p className="font-mono text-2xl font-light text-foreground">
+                Cartographier
+              </p>
+            </div>
+            <div className="relative flex items-center justify-between text-foreground/70">
+              <span className="font-mono text-[10px] uppercase tracking-widest">
+                SLAM live
+              </span>
+              <ArrowRight className="size-4 group-hover:translate-x-0.5 transition-transform" />
+            </div>
+          </Link>
         </section>
       </div>
 

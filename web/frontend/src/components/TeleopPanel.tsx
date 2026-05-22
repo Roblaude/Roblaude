@@ -1,6 +1,7 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { Gamepad2, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Square } from 'lucide-react'
 import { sendTeleop } from '@/hooks/useMappingTelemetry'
+import { VirtualJoystick } from './VirtualJoystick'
 
 // Joystick clavier + boutons. Dead-man : on republie {lin,ang} a 10Hz tant
 // qu'une touche est tenue. Au keyup -> envoie {0,0} pour stopper.
@@ -98,6 +99,14 @@ export function TeleopPanel({ enabled }: Props) {
     sendTeleop(0, 0)
   }
 
+  // joystick : envoie sur le WS avec un scale 0.3 m/s (max conf demo).
+  const onJoystickChange = useCallback((lin: number, ang: number): void => {
+    sendTeleop(lin * 0.3, ang * 0.7)
+  }, [])
+  const onJoystickRelease = useCallback((): void => {
+    sendTeleop(0, 0)
+  }, [])
+
   const btnStyle = (active: boolean): string =>
     `w-12 h-12 flex items-center justify-center rounded border ${
       active
@@ -122,7 +131,15 @@ export function TeleopPanel({ enabled }: Props) {
       </div>
 
       <div className="text-xs text-gray-500 mb-3">
-        Touches : ↑ ↓ ← → ou ZQSD / WASD. Active uniquement pendant RUNNING.
+        Touches : ↑ ↓ ← → ou ZQSD / WASD. Joystick : touch ou drag. Active en RUNNING.
+      </div>
+
+      <div className="flex items-center justify-center mb-4">
+        <VirtualJoystick
+          enabled={enabled}
+          onChange={onJoystickChange}
+          onRelease={onJoystickRelease}
+        />
       </div>
 
       <div className="grid grid-cols-3 gap-2 max-w-[180px] mx-auto">

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ArrowLeft, Play, Square, Save, Wifi, WifiOff, MapPin } from 'lucide-react'
@@ -6,9 +6,12 @@ import { useRobotStore } from '../stores/robotStore'
 import { useMappingStore } from '../stores/mappingStore'
 import { useMappingTelemetry } from '../hooks/useMappingTelemetry'
 import { useMappingStaleness } from '../hooks/useStaleness'
+import { useTfStream, useTopicsStream } from '../hooks/useRobotInfraWs'
 import { startMapping, stopMapping, saveMapping } from '../lib/mappingApi'
 import { MappingSessionsList } from '../components/MappingSessionsList'
 import { TeleopPanel } from '../components/TeleopPanel'
+import { MapLive } from '../components/MapLive'
+import { DockBottom } from '../components/DockBottom'
 
 const STATE_LABEL: Record<string, { label: string; color: string }> = {
   IDLE: { label: 'En veille', color: 'bg-gray-700 text-gray-200' },
@@ -22,11 +25,21 @@ const STATE_LABEL: Record<string, { label: string; color: string }> = {
 export function MappingPage() {
   const robotId = useRobotStore((s) => s.id)
   const robotConnected = useRobotStore((s) => s.connected)
-  const { state, sessionId, mapPngUrl, mapMeta, wsConnected, failureReason, setMapping } = useMappingStore()
+  const robotPos = useRobotStore((s) => s.position)
+  const { state, sessionId, mapMeta, wsConnected, failureReason, setMapping, setRobotPose, pushTrail } = useMappingStore()
 
-  // ouvre le WS telemetry (carte live)
+  // WS telemetry (carte live + scan + plan + frontiers) + TF + Topics infra
   useMappingTelemetry(robotId, true)
+  useTfStream(robotId, true)
+  useTopicsStream(robotId, true)
   const stale = useMappingStaleness()
+
+  // Synchronise robotStore.position -> mappingStore.robotPose + trail
+  // (la position vient du WS legacy /ws via position_update -> robotStore).
+  useEffect(() => {
+    setRobotPose({ x: robotPos.x, y: robotPos.y, theta: robotPos.heading })
+    if (state === 'RUNNING') pushTrail({ x: robotPos.x, y: robotPos.y })
+  }, [robotPos.x, robotPos.y, robotPos.heading, state, setRobotPose, pushTrail])
 
   const [busy, setBusy] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -172,34 +185,28 @@ export function MappingPage() {
         </button>
       </div>
 
-      {/* Carte live + historique sessions cote a cote */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-lg p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <MapPin className="w-4 h-4 text-gray-400" />
-          <h2 className="text-sm font-medium text-gray-300">Carte SLAM live</h2>
+      {/* Carte live + panneaux cote a cote */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+        <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <MapPin className="w-4 h-4 text-gray-400" />
+            <h2 className="text-sm font-medium text-gray-300">Carte SLAM live</h2>
+            {mapMeta && (
+              <span className="text-[10px] text-gray-500 ml-auto">
+                {mapMeta.width}×{mapMeta.height}px · {mapMeta.resolution.toFixed(3)}m/px
+              </span>
+            )}
+          </div>
+          <MapLive />
         </div>
-        <div className="bg-black border border-gray-900 rounded min-h-96 flex items-center justify-center overflow-hidden">
-          {mapPngUrl ? (
-            <img
-              src={mapPngUrl}
-              alt="Carte SLAM"
-              className="max-w-full max-h-[600px] object-contain"
-              style={{ imageRendering: 'pixelated' }}
-            />
-          ) : (
-            <div className="text-gray-600 text-sm py-24">
-              {state === 'RUNNING' ? 'En attente du premier frame…' : 'Demarre une session pour voir la carte'}
-            </div>
-          )}
+
+        <div className="space-y-4">
+          <TeleopPanel enabled={state === 'RUNNING' && wsConnected} />
+          <MappingSessionsList robotId={robotId} refreshKey={refreshKey} />
         </div>
       </div>
 
-      <div className="space-y-4">
-        <TeleopPanel enabled={state === 'RUNNING' && wsConnected} />
-        <MappingSessionsList robotId={robotId} refreshKey={refreshKey} />
-      </div>
-      </div>
+      <DockBottom />
     </div>
   )
 }

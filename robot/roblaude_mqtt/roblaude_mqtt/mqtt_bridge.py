@@ -8,16 +8,71 @@
 # une fois le mission_executor (T3.2.5) et la publication de position (T3.2.8)
 # disponibles.
 
+import io
 import json
 import math
+import threading
 import time
+import uuid
 from datetime import datetime, timezone
 
 import paho.mqtt.client as mqtt
 import rclpy
-from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry, OccupancyGrid, Path
 from rclpy.node import Node
+from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Float32, String
+from tf2_msgs.msg import TFMessage
+from visualization_msgs.msg import MarkerArray
+
+
+# --- utilities (testables hors ROS) ---
+
+def occupancy_to_png(width: int, height: int, data) -> bytes:
+    """OccupancyGrid (-1 unknown, 0 free, 100 occupied) -> PNG niveaux gris.
+    Convention SLAM PGM : 205 gris (unknown), 254 blanc (free), 0 noir (occupied).
+    Y-flip car PIL origin = top-left, SLAM = bottom-left.
+    """
+    from PIL import Image
+    arr = bytearray(width * height)
+    for i, v in enumerate(data):
+        if v < 0:
+            arr[i] = 205
+        elif v < 50:
+            arr[i] = 254
+        else:
+            arr[i] = 0
+    img = Image.frombytes('L', (width, height), bytes(arr))
+    img = img.transpose(Image.FLIP_TOP_BOTTOM)
+    buf = io.BytesIO()
+    img.save(buf, format='PNG', optimize=True)
+    return buf.getvalue()
+
+
+class TeleopDeadman:
+    """Reset timer a chaque feed(). Si expiry sans feed -> publish_zero().
+    Evite runaway si onglet web ferme brutalement ou cle clavier stuck."""
+
+    def __init__(self, publish_zero, timeout_s: float = 0.5):
+        self.publish_zero = publish_zero
+        self.timeout_s = timeout_s
+        self._timer = None
+        self._lock = threading.Lock()
+
+    def feed(self, lin: float, ang: float):
+        with self._lock:
+            if self._timer is not None:
+                self._timer.cancel()
+            self._timer = threading.Timer(self.timeout_s, self.publish_zero)
+            self._timer.daemon = True
+            self._timer.start()
+
+    def stop(self):
+        with self._lock:
+            if self._timer is not None:
+                self._timer.cancel()
+                self._timer = None
 
 SCHEMA_VERSION = 1
 
@@ -29,6 +84,8 @@ POSITION_PUBLISH_PERIOD_S = 1.0
 BATTERY_EMPTY_V = 10.0
 BATTERY_FULL_V = 12.6
 
+
+
 # Commande MQTT (suffixe topic cmd/<action>) -> topic ROS 2 publie vers le graphe
 CMD_TO_ROS_TOPIC = {
     'mission': 'mqtt/mission',
@@ -37,6 +94,14 @@ CMD_TO_ROS_TOPIC = {
     'loading-confirmed': 'mqtt/loading_confirmed',
     'emergency-stop': 'mqtt/emergency_stop',
 }
+
+# Throttle pour les flux mapping haut-debit (scan, tf) — pas besoin de plus en UI
+SCAN_PUBLISH_PERIOD_S = 0.2   # 5 Hz max
+TF_PUBLISH_PERIOD_S = 0.2     # 5 Hz max
+
+# Clamp teleop (double securite par-dessus le clamp backend)
+TELEOP_MAX_LIN = 0.5  # m/s
+TELEOP_MAX_ANG = 1.0  # rad/s
 
 
 def now_iso() -> str:
@@ -83,6 +148,30 @@ class MqttBridge(Node):
         self.create_subscription(String, 'mission/ack', self._on_mission_ack, 10)
         self.create_subscription(String, 'mission/status', self._on_mission_status, 10)
         self.create_subscription(String, 'mission/result', self._on_mission_result, 10)
+
+        # --- Mode mapping (T3.5.3) : flux temps reel SLAM/Nav2 -> MQTT ---
+        # Cache TF (les TFMessage donnent des updates partiels, on accumule)
+        self._tf_buffer = {}
+        self._last_scan_publish = 0.0
+        self._last_tf_publish = 0.0
+        self.create_subscription(OccupancyGrid, '/map', self._on_map, 10)
+        self.create_subscription(LaserScan, '/scan_multi', self._on_scan, 10)
+        self.create_subscription(Path, '/plan', self._on_plan, 10)
+        self.create_subscription(MarkerArray, '/explore/frontiers', self._on_frontiers, 10)
+        self.create_subscription(TFMessage, '/tf', self._on_tf, 10)
+        # Bridge vers les nodes RobLaude (mission_executor / mapping_supervisor)
+        self.create_subscription(String, '/mqtt/mapping/state', self._on_mapping_state, 10)
+        self.create_subscription(String, '/mqtt/mapping/save_result', self._on_save_result, 10)
+
+        # --- Publishers vers le graphe ROS (commandes MQTT -> ROS) ---
+        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.mapping_cmd_pub = self.create_publisher(String, '/mqtt/cmd/mapping', 10)
+
+        # Dead-man teleop : si pas de cmd recu pendant 500ms, on stoppe le robot
+        self.teleop_deadman = TeleopDeadman(
+            publish_zero=lambda: self.cmd_vel_pub.publish(Twist()),
+            timeout_s=0.5,
+        )
 
         # --- Client MQTT ---
         # clean_session=False : le broker met en file les commandes recues
@@ -151,7 +240,6 @@ class MqttBridge(Node):
             self.get_logger().warn(f'Message rejete sur {msg.topic} : JSON invalide ({err})')
             return
         if not isinstance(payload, dict):
-            # un tableau ou un scalaire JSON est valide mais hors-spec ici
             self.get_logger().warn(f'Message rejete sur {msg.topic} : payload non-objet')
             return
         if payload.get('schemaVersion') != SCHEMA_VERSION:
@@ -159,13 +247,47 @@ class MqttBridge(Node):
                 f'Message rejete sur {msg.topic} : schemaVersion inconnue')
             return
 
-        action = msg.topic.rsplit('/', 1)[-1]  # …/cmd/<action>
-        pub = self._cmd_pubs.get(action)
+        # topic = roblaude/{id}/cmd/{action} ou cmd/mapping/{start|stop|save}
+        # On extrait la partie apres /cmd/
+        try:
+            after_cmd = msg.topic.split('/cmd/', 1)[1]
+        except IndexError:
+            return
+
+        # Cas 1 : cmd/teleop (haut-debit, 20Hz) -> /cmd_vel direct, pas via topic intermediate
+        if after_cmd == 'teleop':
+            try:
+                lin = float(payload.get('lin', 0))
+                ang = float(payload.get('ang', 0))
+            except (ValueError, TypeError):
+                return
+            if not math.isfinite(lin) or not math.isfinite(ang):
+                return
+            # Clamp dur en plus du clamp backend
+            cLin = max(-TELEOP_MAX_LIN, min(TELEOP_MAX_LIN, lin))
+            cAng = max(-TELEOP_MAX_ANG, min(TELEOP_MAX_ANG, ang))
+            twist = Twist()
+            twist.linear.x = cLin
+            twist.angular.z = cAng
+            self.cmd_vel_pub.publish(twist)
+            self.teleop_deadman.feed(cLin, cAng)
+            return
+
+        # Cas 2 : cmd/mapping/{start,stop,save} -> /mqtt/cmd/mapping (consomme par supervisor)
+        if after_cmd.startswith('mapping/'):
+            action = after_cmd.split('/', 1)[1]  # start | stop | save
+            ros_payload = String(data=json.dumps({'action': action, **payload}))
+            self.mapping_cmd_pub.publish(ros_payload)
+            self.get_logger().info(f"mapping/{action} transmis au supervisor")
+            return
+
+        # Cas 3 : autres cmd/* (mission, cancel, etc.) -> dispatch via map existante
+        pub = self._cmd_pubs.get(after_cmd)
         if pub is None:
-            self.get_logger().warn(f'Commande inconnue : {action}')
+            self.get_logger().warn(f'Commande inconnue : {after_cmd}')
             return
         pub.publish(String(data=json.dumps(payload)))
-        self.get_logger().info(f"Commande '{action}' transmise au graphe ROS")
+        self.get_logger().info(f"Commande '{after_cmd}' transmise au graphe ROS")
 
     # ---------- Callbacks ROS 2 -> MQTT ----------
 
@@ -234,6 +356,125 @@ class MqttBridge(Node):
 
     def _on_mission_result(self, msg):  # T4.1.5
         self._forward_json(msg, 'mission/result', qos=2, retain=False)
+
+    # ---------- T3.5.3 — Flux mapping ROS -> MQTT ----------
+
+    def _on_map(self, msg):
+        """OccupancyGrid -> PNG binary retained sur telemetry/map + meta JSON
+        compagnon sur telemetry/map_meta (MQTT v3 sans user-properties)."""
+        try:
+            png = occupancy_to_png(msg.info.width, msg.info.height, list(msg.data))
+        except Exception as e:
+            self.get_logger().error(f'PNG conversion echec: {e}')
+            return
+        self.mqtt.publish(f'{self.base}/telemetry/map', png, qos=1, retain=True)
+        meta = json.dumps({
+            'schemaVersion': SCHEMA_VERSION,
+            'messageId': str(uuid.uuid4()),
+            'timestamp': now_iso(),
+            'width': msg.info.width,
+            'height': msg.info.height,
+            'resolution': msg.info.resolution,
+            'originX': msg.info.origin.position.x,
+            'originY': msg.info.origin.position.y,
+            'stamp': msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
+        })
+        self.mqtt.publish(f'{self.base}/telemetry/map_meta', meta, qos=1, retain=True)
+
+    def _on_scan(self, msg):
+        """LaserScan (haut-debit) throttle 5Hz -> telemetry/scan JSON."""
+        now = time.monotonic()
+        if now - self._last_scan_publish < SCAN_PUBLISH_PERIOD_S:
+            return
+        self._last_scan_publish = now
+        payload = {
+            'schemaVersion': SCHEMA_VERSION,
+            'messageId': str(uuid.uuid4()),
+            'timestamp': now_iso(),
+            'ranges': [float(r) for r in msg.ranges],
+            'angleMin': msg.angle_min,
+            'angleIncrement': msg.angle_increment,
+            'frameId': msg.header.frame_id,
+        }
+        self.mqtt.publish(f'{self.base}/telemetry/scan',
+                          json.dumps(payload), qos=0, retain=False)
+
+    def _on_plan(self, msg):
+        """Path Nav2 -> telemetry/plan JSON."""
+        poses = [
+            {'x': p.pose.position.x, 'y': p.pose.position.y, 'theta': 0.0}
+            for p in msg.poses
+        ]
+        payload = {
+            'schemaVersion': SCHEMA_VERSION, 'messageId': str(uuid.uuid4()),
+            'timestamp': now_iso(), 'poses': poses,
+        }
+        self.mqtt.publish(f'{self.base}/telemetry/plan',
+                          json.dumps(payload), qos=0, retain=False)
+
+    def _on_frontiers(self, msg):
+        """explore_lite frontieres -> telemetry/frontiers JSON."""
+        cells = [
+            {'x': m.pose.position.x, 'y': m.pose.position.y, 'size': m.scale.x}
+            for m in msg.markers
+        ]
+        payload = {
+            'schemaVersion': SCHEMA_VERSION, 'messageId': str(uuid.uuid4()),
+            'timestamp': now_iso(), 'cells': cells,
+        }
+        self.mqtt.publish(f'{self.base}/telemetry/frontiers',
+                          json.dumps(payload), qos=0, retain=False)
+
+    def _on_tf(self, msg):
+        """TFMessage (updates partiels) -> cache + snapshot complet @5Hz."""
+        for t in msg.transforms:
+            self._tf_buffer[(t.header.frame_id, t.child_frame_id)] = t
+
+        now = time.monotonic()
+        if now - self._last_tf_publish < TF_PUBLISH_PERIOD_S:
+            return
+        self._last_tf_publish = now
+
+        frames = []
+        for (parent, child), t in self._tf_buffer.items():
+            tr = t.transform.translation
+            r = t.transform.rotation
+            frames.append({
+                'id': child, 'parent': parent,
+                'x': tr.x, 'y': tr.y, 'z': tr.z,
+                'qx': r.x, 'qy': r.y, 'qz': r.z, 'qw': r.w,
+            })
+        payload = {
+            'schemaVersion': SCHEMA_VERSION, 'messageId': str(uuid.uuid4()),
+            'timestamp': now_iso(), 'frames': frames,
+        }
+        self.mqtt.publish(f'{self.base}/telemetry/tf',
+                          json.dumps(payload), qos=0, retain=False)
+
+    def _on_mapping_state(self, msg):
+        """Passthrough du supervisor : retained sur mapping/state."""
+        try:
+            data = json.loads(msg.data)
+        except json.JSONDecodeError:
+            return
+        payload = json.dumps({
+            'schemaVersion': SCHEMA_VERSION, 'messageId': str(uuid.uuid4()),
+            'timestamp': now_iso(), **data,
+        })
+        self.mqtt.publish(f'{self.base}/mapping/state', payload, qos=1, retain=True)
+
+    def _on_save_result(self, msg):
+        """Passthrough save_result du supervisor : QoS 2 one-shot."""
+        try:
+            data = json.loads(msg.data)
+        except json.JSONDecodeError:
+            return
+        payload = json.dumps({
+            'schemaVersion': SCHEMA_VERSION,
+            'timestamp': now_iso(), **data,
+        })
+        self.mqtt.publish(f'{self.base}/mapping/save-result',
+                          payload, qos=2, retain=False)
 
     # ---------- Arret ----------
 

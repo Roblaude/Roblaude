@@ -1,10 +1,11 @@
 // Ecriture/lecture des cartes SLAM (PGM + YAML + PNG) sur disque.
 // Stockage : web/backend/maps/<snapshotId>.{pgm,yaml,png}
-// Le PNG MVP = copie du PGM (le frontend recoit le live PNG via /telemetry/map).
+// PNG genere via sharp (libvips lit le PGM raw natif).
 
 import { writeFile, mkdir, readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
+import sharp from 'sharp'
 
 const MAPS_DIR = path.resolve(process.cwd(), 'maps')
 
@@ -24,8 +25,17 @@ export async function saveSnapshotFiles(
   const pngPath = path.join(MAPS_DIR, `${snapshotId}.png`)
   await writeFile(pgmPath, pgmBuf)
   await writeFile(yamlPath, yamlContent)
-  // todo: convertir PGM -> PNG via sharp (cf. mapController). MVP : copie brute.
-  await writeFile(pngPath, pgmBuf)
+  // sharp lit le PGM raw via libvips, sortie PNG vraie -> le snapshot est
+  // ouvrable directement dans n'importe quel viewer (vs PGM = niche).
+  try {
+    const pngBuf = await sharp(pgmBuf).png().toBuffer()
+    await writeFile(pngPath, pngBuf)
+  } catch (err) {
+    // fallback PGM brut si sharp echoue (PGM mal forme ?) — on prefere
+    // garder un fichier que rien du tout, le snapshot reste recuperable.
+    console.error('[mapStorage] sharp PGM->PNG echec :', err instanceof Error ? err.message : err)
+    await writeFile(pngPath, pgmBuf)
+  }
   return { pgmPath, yamlPath, pngPath, sizeBytes: pgmBuf.length }
 }
 

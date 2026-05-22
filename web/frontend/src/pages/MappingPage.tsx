@@ -14,7 +14,8 @@ import { MapLive } from '../components/MapLive'
 import { DockBottom } from '../components/DockBottom'
 import { MiniMapPip } from '../components/MiniMapPip'
 import { CameraView } from '../components/CameraView'
-import { ArmViewer } from '../components/ArmViewer'
+import { URDFViewer } from '../components/URDFViewer'
+import { ArmController } from '../components/ArmController'
 import { listAnnotations, type Annotation } from '../lib/annotationsApi'
 import { listSessions } from '../lib/mappingApi'
 
@@ -252,6 +253,7 @@ export function MappingPage() {
 
         <div className="space-y-4">
           <TeleopPanel enabled={state === 'RUNNING' && wsConnected} />
+          <ArmController robotId={robotId} />
           <MappingSessionsList robotId={robotId} refreshKey={refreshKey} />
         </div>
       </div>
@@ -259,7 +261,7 @@ export function MappingPage() {
       <DockBottom />
       <MiniMapPip />
       <CameraView robotId={robotId} />
-      <ArmViewer robotId={robotId} />
+      <URDFViewer robotId={robotId} />
     </div>
   )
 }

@@ -93,6 +93,7 @@ export type CmdAction =
   | 'mapping/stop'
   | 'mapping/save'
   | 'teleop'
+  | 'arm'
 
 // Duree de vie d'un messageId dans le cache d'idempotence. Au-dela, le retry
 // du robot est traite comme un nouveau message. Le robot ne doit pas retry

@@ -6,5 +6,7 @@ export default defineConfig({
     environment: 'node',
     // ne scanne que les sources — sinon vitest ramasse les .js compiles dans dist/
     include: ['src/**/*.test.ts'],
+    // dotenv/config charge .env avant les tests (sinon JWT_SECRET manque a l'import auth.ts)
+    setupFiles: ['dotenv/config'],
   },
 })

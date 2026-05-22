@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { useRobotStore } from '../stores/robotStore'
 import { StopButton } from './StopButton'
+import { useThemeStore } from '../stores/themeStore'
 import {
   LayoutDashboard,
   ListChecks,
@@ -11,6 +12,7 @@ import {
   LogOut,
   Map,
   Terminal,
+  Sparkles,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -26,6 +28,8 @@ const NAV_ITEMS = [
 export function Sidebar() {
   const { user, logout } = useAuthStore()
   const { connected, status } = useRobotStore()
+  const arcade = useThemeStore((s) => s.arcade)
+  const toggleArcade = useThemeStore((s) => s.toggleArcade)
 
   return (
     <aside
@@ -110,6 +114,18 @@ export function Sidebar() {
 
       {/* Footer */}
       <div className="px-4 py-4 border-t border-border space-y-3">
+        <button
+          onClick={toggleArcade}
+          className={`w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs rounded border transition-colors ${
+            arcade
+              ? 'bg-primary/20 border-primary text-primary'
+              : 'border-border text-muted-foreground hover:text-foreground'
+          }`}
+          aria-pressed={arcade}
+        >
+          <Sparkles className="w-3 h-3" /> {arcade ? 'Arcade ON' : 'Mode arcade'}
+        </button>
+
         <StopButton />
 
         <div className="flex items-center gap-2.5 pt-1">

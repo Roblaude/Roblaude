@@ -5,6 +5,8 @@ import { useMappingStore } from '@/stores/mappingStore'
 import { worldToPixel, pixelToWorld } from '@/lib/mapProjection'
 import { getHeatmapCells, recordVisit, CELL_SIZE_M } from '@/lib/heatmapAccumulator'
 import { createAnnotation, type Annotation } from '@/lib/annotationsApi'
+import { GhostLayer } from './GhostLayer'
+import { useRobotStore } from '@/stores/robotStore'
 
 // Carte SLAM live avec overlay canvas (scan, plan, frontiers, trail, heatmap)
 // + annotations cliquables + mode plein ecran.
@@ -16,6 +18,7 @@ interface LayerToggles {
   trail: boolean
   heatmap: boolean
   annotations: boolean
+  ghost: boolean
 }
 
 interface PendingAnnotation {
@@ -34,6 +37,7 @@ interface Props {
 
 export function MapLive({ currentSnapshotId = null, annotations = [], onAnnotationCreated }: Props) {
   const { mapPngUrl, mapMeta, scan, plan, frontiers, trail, robotPose } = useMappingStore()
+  const robotId = useRobotStore((s) => s.id)
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [fullscreen, setFullscreen] = useState(false)
@@ -44,25 +48,25 @@ export function MapLive({ currentSnapshotId = null, annotations = [], onAnnotati
     trail: true,
     heatmap: false,
     annotations: true,
+    ghost: false,
   })
   const [showLayerMenu, setShowLayerMenu] = useState(false)
   const [pending, setPending] = useState<PendingAnnotation | null>(null)
   const [pendingLabel, setPendingLabel] = useState('')
 
+  // CSS fullscreen (au lieu de Fullscreen API) — comme ca les siblings
+  // fixed (CameraView, ArmViewer, MiniMapPip) restent visibles dans le DOM.
   const toggleFullscreen = useCallback((): void => {
-    const el = containerRef.current
-    if (!el) return
-    if (!document.fullscreenElement) {
-      void el.requestFullscreen()
-    } else {
-      void document.exitFullscreen()
-    }
+    setFullscreen((f) => !f)
   }, [])
 
+  // Echap pour sortir du plein ecran (cohherent avec Fullscreen API natif)
   useEffect(() => {
-    const onFs = (): void => setFullscreen(!!document.fullscreenElement)
-    document.addEventListener('fullscreenchange', onFs)
-    return () => document.removeEventListener('fullscreenchange', onFs)
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setFullscreen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
 
   // accumule les visites du robot pour la heatmap
@@ -227,8 +231,10 @@ export function MapLive({ currentSnapshotId = null, annotations = [], onAnnotati
   return (
     <div
       ref={containerRef}
-      className={`relative bg-black border border-gray-900 rounded ${
-        fullscreen ? 'flex items-center justify-center' : ''
+      className={`bg-black border border-gray-900 rounded ${
+        fullscreen
+          ? 'fixed inset-0 z-40 flex items-center justify-center'
+          : 'relative'
       }`}
     >
       {/* boutons en haut a droite */}
@@ -243,7 +249,7 @@ export function MapLive({ currentSnapshotId = null, annotations = [], onAnnotati
           </button>
           {showLayerMenu && (
             <div className="absolute top-full right-0 mt-1 bg-gray-900 border border-gray-700 rounded p-2 text-xs space-y-1 min-w-[140px]">
-              {(['scan', 'plan', 'frontiers', 'trail', 'heatmap', 'annotations'] as const).map((k) => (
+              {(['scan', 'plan', 'frontiers', 'trail', 'heatmap', 'annotations', 'ghost'] as const).map((k) => (
                 <label key={k} className="flex items-center gap-2 text-gray-200 cursor-pointer">
                   <input
                     type="checkbox"
@@ -276,6 +282,12 @@ export function MapLive({ currentSnapshotId = null, annotations = [], onAnnotati
               alt="Carte SLAM"
               className={fullscreen ? 'max-h-screen max-w-screen' : 'max-w-full max-h-[600px]'}
               style={{ imageRendering: 'pixelated', display: 'block' }}
+            />
+            <GhostLayer
+              robotId={robotId}
+              enabled={layers.ghost}
+              width={mapMeta?.width ?? 0}
+              height={mapMeta?.height ?? 0}
             />
             <canvas
               ref={canvasRef}

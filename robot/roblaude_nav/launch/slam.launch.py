@@ -34,15 +34,20 @@ def generate_launch_description():
             parameters=[{
                 'use_sim_time': False,           # False = hardware reel
                 'odom_frame': 'odom',
-                'base_frame': 'base_link',
+                'base_frame': 'base_footprint',  # PAS base_link — sinon chicken-and-egg :
+                                                 # /scan_multi a frame_id=base_link, si base_frame=base_link
+                                                 # slam_toolbox doit transformer base_link->map directement,
+                                                 # or map n'existe pas encore -> queue full -> deadlock.
                 'map_frame': 'map',
                 'scan_topic': '/scan_multi',     # fusion /scan0+/scan1 par ira_laser_tools (lance par base_bringup)
-                'mode': 'mapping',               # 'mapping' ou 'localization'
+                'mode': 'mapping',
                 'resolution': 0.05,              # 5 cm par pixel
-                'max_laser_range': 8.0,          # metres (YDLidar)
-                'minimum_time_interval': 0.2,    # secondes
-                'transform_publish_period': 0.05,
-                'map_update_interval': 5.0,
+                'max_laser_range': 6.0,          # match config Yahboom validee (au lieu de 8.0)
+                'minimum_time_interval': 0.5,    # 0.5s = ~2Hz process target, evite overrun a 7Hz scan
+                'transform_publish_period': 0.02,
+                'map_update_interval': 3.0,
+                'scan_buffer_size': 10,          # default trop petit, on encaisse 10 scans en attente
+                'transform_timeout': 0.5,        # marge pour TF cache
             }]
         ),
     ])

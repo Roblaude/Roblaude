@@ -8,7 +8,9 @@ import { NewMissionPage } from './pages/NewMissionPage'
 import { AdminPage } from './pages/AdminPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { MappingPage } from './pages/MappingPage'
+import { AdminSshPage } from './pages/AdminSshPage'
 import { LoginPage } from './pages/LoginPage'
+import { DegradedModeBanner } from './components/DegradedModeBanner'
 import { RequireAuth } from './components/RequireAuth'
 import { useAuthStore } from './stores/authStore'
 import { useWebSocket } from './hooks/useWebSocket'
@@ -18,6 +20,8 @@ export default function App() {
   // ouvre la connexion WS au login, ferme au logout — singleton
   useWebSocket()
   return (
+    <>
+      <DegradedModeBanner />
     <BrowserRouter>
       <Routes>
         {/* Routes publiques */}
@@ -36,6 +40,10 @@ export default function App() {
             />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/mapping" element={<MappingPage />} />
+            <Route
+              path="/admin/ssh"
+              element={role === 'ADMIN' ? <AdminSshPage /> : <Navigate to="/" replace />}
+            />
           </Route>
         </Route>
 
@@ -43,5 +51,6 @@ export default function App() {
       </Routes>
       <Toaster richColors position="top-right" />
     </BrowserRouter>
+    </>
   )
 }

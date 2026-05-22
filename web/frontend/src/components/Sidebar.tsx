@@ -9,14 +9,18 @@ import {
   Settings2,
   User,
   LogOut,
+  Map,
+  Terminal,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { to: '/', label: 'Dashboard', code: '01', Icon: LayoutDashboard },
-  { to: '/missions', label: 'Missions', code: '02', Icon: ListChecks },
-  { to: '/missions/new', label: 'Nouvelle mission', code: '03', Icon: Plus },
-  { to: '/admin', label: 'Admin', code: '04', Icon: Settings2 },
-  { to: '/profile', label: 'Profil', code: '05', Icon: User },
+  { to: '/', label: 'Dashboard', code: '01', Icon: LayoutDashboard, adminOnly: false },
+  { to: '/missions', label: 'Missions', code: '02', Icon: ListChecks, adminOnly: false },
+  { to: '/missions/new', label: 'Nouvelle mission', code: '03', Icon: Plus, adminOnly: false },
+  { to: '/mapping', label: 'Mode mapping', code: '04', Icon: Map, adminOnly: false },
+  { to: '/admin', label: 'Admin', code: '05', Icon: Settings2, adminOnly: true },
+  { to: '/admin/ssh', label: 'SSH admin', code: '06', Icon: Terminal, adminOnly: true },
+  { to: '/profile', label: 'Profil', code: '07', Icon: User, adminOnly: false },
 ]
 
 export function Sidebar() {
@@ -67,7 +71,7 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {NAV_ITEMS.map(({ to, label, code, Icon }) => (
+        {NAV_ITEMS.filter((item) => !item.adminOnly || user?.role === 'ADMIN').map(({ to, label, code, Icon }) => (
           <NavLink
             key={to}
             to={to}

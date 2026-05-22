@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ArrowLeft, Play, Square, Save, Wifi, WifiOff, MapPin } from 'lucide-react'
 import { useRobotStore } from '../stores/robotStore'
@@ -20,7 +20,12 @@ const STATE_LABEL: Record<string, { label: string; color: string }> = {
 }
 
 export function MappingPage() {
-  const robotId = useRobotStore((s) => s.id)
+  const params = useParams<{ robotId?: string }>()
+  const storeRobotId = useRobotStore((s) => s.id)
+  // /mapping/:robotId override le robot courant du store, sinon fallback
+  // au robot par defaut (single-robot MVP).
+  const parsed = params.robotId ? Number(params.robotId) : NaN
+  const robotId = Number.isInteger(parsed) && parsed > 0 ? parsed : storeRobotId
   const robotConnected = useRobotStore((s) => s.connected)
   const { state, sessionId, mapPngUrl, mapMeta, wsConnected, failureReason, setMapping } = useMappingStore()
 

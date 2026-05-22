@@ -15,6 +15,9 @@ model User {
   role      Role      @default(USER)
   createdAt DateTime  @default(now())
   missions  Mission[]
+  mappingSessions MappingSession[]
+  annotations     Annotation[]
+  sshAuditLogs    SshAuditLog[]
 }
 
 model Robot {
@@ -27,6 +30,9 @@ model Robot {
   battery   Int         @default(100)
   createdAt DateTime    @default(now())
   missions  Mission[]
+  mappingSessions MappingSession[]
+  mapSnapshots    MapSnapshot[]
+  sshAuditLogs    SshAuditLog[]
 }
 
 model Point {
@@ -102,4 +108,96 @@ enum RobotStatus {
   BUSY
   OFFLINE
   ERROR
+}
+
+enum MappingState {
+  STARTING
+  RUNNING
+  STOPPING
+  STOPPED
+  FAILED
+}
+
+enum SshMode {
+  ALLOWLIST
+  ELEVATED
+}
+
+model MappingSession {
+  id            Int             @id @default(autoincrement())
+  robotId       Int
+  robot         Robot           @relation(fields: [robotId], references: [id])
+  startedById   Int
+  startedBy     User            @relation(fields: [startedById], references: [id])
+  state         MappingState
+  failureReason String?
+  startedAt     DateTime        @default(now())
+  endedAt       DateTime?
+  coverageM2    Float?
+  durationSec   Int?
+  snapshots     MapSnapshot[]
+  annotations   Annotation[]
+
+  @@index([robotId, startedAt])
+}
+
+model MapSnapshot {
+  id           Int             @id @default(autoincrement())
+  sessionId    Int
+  session      MappingSession  @relation(fields: [sessionId], references: [id])
+  robotId      Int
+  robot        Robot           @relation(fields: [robotId], references: [id])
+  name         String
+  pgmPath      String
+  yamlPath     String
+  pngPath      String
+  widthPx      Int
+  heightPx     Int
+  resolutionM  Float
+  originX      Float
+  originY      Float
+  originTheta  Float
+  sizeBytes    Int
+  isCurrent    Boolean         @default(false)
+  createdAt    DateTime        @default(now())
+  annotations  Annotation[]
+
+  @@index([robotId, createdAt])
+  @@index([robotId, isCurrent])
+}
+
+model Annotation {
+  id            Int              @id @default(autoincrement())
+  mapSnapshotId Int
+  mapSnapshot   MapSnapshot      @relation(fields: [mapSnapshotId], references: [id])
+  sessionId     Int?
+  session       MappingSession?  @relation(fields: [sessionId], references: [id])
+  label         String
+  icon          String?
+  color         String           @default("#3b82f6")
+  x             Float
+  y             Float
+  createdById   Int
+  createdBy     User             @relation(fields: [createdById], references: [id])
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([mapSnapshotId])
+}
+
+model SshAuditLog {
+  id         Int       @id @default(autoincrement())
+  robotId    Int
+  robot      Robot     @relation(fields: [robotId], references: [id])
+  userId     Int
+  user       User      @relation(fields: [userId], references: [id])
+  mode       SshMode
+  command    String    @db.Text
+  exitCode   Int?
+  durationMs Int?
+  ipAddr     String?
+  createdAt  DateTime  @default(now())
+
+  @@index([robotId, createdAt])
+  @@index([userId, createdAt])
 }

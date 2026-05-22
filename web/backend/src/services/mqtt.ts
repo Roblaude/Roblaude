@@ -216,6 +216,11 @@ class RobotMqttAdapter {
       this.handleMap(robotId, payload)
       return
     }
+    // telemetry/camera = JPEG binaire, pas JSON. Idem.
+    if (family === 'telemetry' && sub === 'camera') {
+      mqttEvents.emit('camera_frame', { robotId, jpeg: payload })
+      return
+    }
 
     let data: Record<string, unknown>
     try {
@@ -238,6 +243,7 @@ class RobotMqttAdapter {
         else if (sub === 'plan') this.handlePlan(robotId, data)
         else if (sub === 'frontiers') this.handleFrontiers(robotId, data)
         else if (sub === 'tf') this.handleTf(robotId, data)
+        else if (sub === 'joint_states') this.handleJointStates(robotId, data)
         break
       case 'status':
         void this.handleStatus(robotId, data)
@@ -569,6 +575,16 @@ class RobotMqttAdapter {
           err instanceof Error ? err.message : err))
     }
     mqttEvents.emit('mapping_state', { robotId, ...parsed.data })
+  }
+
+  // joint_states — pose articulaire du bras (5-DOF). Pas de schema strict :
+  // on accepte un array positions + names optionnels. Le frontend valide la
+  // longueur cote three.js.
+  private handleJointStates(robotId: number, data: Record<string, unknown>): void {
+    const positions = data.positions
+    if (!Array.isArray(positions) || positions.some((v) => typeof v !== 'number')) return
+    const names = Array.isArray(data.names) ? (data.names as string[]) : undefined
+    mqttEvents.emit('joint_states', { robotId, positions: positions as number[], names })
   }
 
   // mapping/save-result — le bridge robot renvoie le PGM en base64 + YAML.

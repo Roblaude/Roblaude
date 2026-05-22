@@ -8,6 +8,7 @@ import pointsRouter from './routes/points'
 import robotsRouter from './routes/robots'
 import mappingRouter from './routes/mapping'
 import annotationsRouter from './routes/annotations'
+import sshRouter from './routes/ssh'
 
 const app = express()
 
@@ -34,6 +35,7 @@ app.use('/api/points', authGuard, pointsRouter)
 app.use('/api/robots', authGuard, robotsRouter)
 app.use('/api/mapping', authGuard, mappingRouter)
 app.use('/api/annotations', authGuard, annotationsRouter)
+app.use('/api/admin/ssh', authGuard, sshRouter)
 
 // error handler — doit etre en dernier
 app.use(errorHandler)

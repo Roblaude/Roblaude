@@ -21,7 +21,7 @@ import rclpy
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry, OccupancyGrid, Path
 from rclpy.node import Node
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import CompressedImage, JointState, LaserScan
 from std_msgs.msg import Float32, String
 from tf2_msgs.msg import TFMessage
 from visualization_msgs.msg import MarkerArray
@@ -98,6 +98,8 @@ CMD_TO_ROS_TOPIC = {
 # Throttle pour les flux mapping haut-debit (scan, tf) — pas besoin de plus en UI
 SCAN_PUBLISH_PERIOD_S = 0.2   # 5 Hz max
 TF_PUBLISH_PERIOD_S = 0.2     # 5 Hz max
+CAMERA_PUBLISH_PERIOD_S = 0.2   # 5 Hz max — bande passante
+JOINT_STATES_PUBLISH_PERIOD_S = 0.1  # 10 Hz max — fluidite visu bras
 
 # Clamp teleop (double securite par-dessus le clamp backend)
 TELEOP_MAX_LIN = 0.5  # m/s
@@ -107,6 +109,17 @@ TELEOP_MAX_ANG = 1.0  # rad/s
 def now_iso() -> str:
     """Horodatage ISO-8601 UTC pour l'enveloppe des messages."""
     return datetime.now(timezone.utc).isoformat(timespec='milliseconds')
+
+
+def build_joint_states_payload(names, positions) -> dict:
+    """Compose le payload JSON pour telemetry/joint_states. Pur, testable."""
+    return {
+        'schemaVersion': SCHEMA_VERSION,
+        'messageId': str(uuid.uuid4()),
+        'timestamp': now_iso(),
+        'names': list(names),
+        'positions': list(positions),
+    }
 
 
 class MqttBridge(Node):
@@ -154,11 +167,22 @@ class MqttBridge(Node):
         self._tf_buffer = {}
         self._last_scan_publish = 0.0
         self._last_tf_publish = 0.0
+        self._last_camera_publish = 0.0
+        self._last_joint_states_publish = 0.0
         self.create_subscription(OccupancyGrid, '/map', self._on_map, 10)
         self.create_subscription(LaserScan, '/scan_multi', self._on_scan, 10)
         self.create_subscription(Path, '/plan', self._on_plan, 10)
         self.create_subscription(MarkerArray, '/explore/frontiers', self._on_frontiers, 10)
         self.create_subscription(TFMessage, '/tf', self._on_tf, 10)
+        # Camera + joint_states (T-final UI live)
+        # Topics ROS configurables — le Yahboom M3 Pro peut publier sous
+        # /usb_cam/image_raw/compressed ou /camera/color/image_raw/compressed.
+        self.declare_parameter('camera_topic', '/camera/color/image_raw/compressed')
+        self.declare_parameter('joint_states_topic', '/joint_states')
+        camera_topic = self.get_parameter('camera_topic').value
+        joint_states_topic = self.get_parameter('joint_states_topic').value
+        self.create_subscription(CompressedImage, camera_topic, self._on_camera, 5)
+        self.create_subscription(JointState, joint_states_topic, self._on_joint_states, 10)
         # Bridge vers les nodes RobLaude (mission_executor / mapping_supervisor)
         self.create_subscription(String, '/mqtt/mapping/state', self._on_mapping_state, 10)
         self.create_subscription(String, '/mqtt/mapping/save_result', self._on_save_result, 10)
@@ -449,6 +473,36 @@ class MqttBridge(Node):
             'timestamp': now_iso(), 'frames': frames,
         }
         self.mqtt.publish(f'{self.base}/telemetry/tf',
+                          json.dumps(payload), qos=0, retain=False)
+
+    def _on_camera(self, msg):
+        """CompressedImage (JPEG) -> binary retained sur telemetry/camera.
+        Throttle 5Hz : le frontend redessine au max a cette frequence."""
+        now = time.monotonic()
+        if now - self._last_camera_publish < CAMERA_PUBLISH_PERIOD_S:
+            return
+        self._last_camera_publish = now
+        # msg.data est un array.array('B', ...) en JPEG deja compresse.
+        # On publie tel quel (pas d'envelope JSON — c'est du binary pur).
+        # retain=True pour qu'un client qui se connecte voit le dernier frame.
+        try:
+            self.mqtt.publish(f'{self.base}/telemetry/camera',
+                              bytes(msg.data), qos=0, retain=True)
+        except Exception as e:
+            self.get_logger().warn(f'publish camera echec: {e}')
+
+    def _on_joint_states(self, msg):
+        """JointState -> JSON telemetry/joint_states. Throttle 10Hz."""
+        now = time.monotonic()
+        if now - self._last_joint_states_publish < JOINT_STATES_PUBLISH_PERIOD_S:
+            return
+        self._last_joint_states_publish = now
+        # le frontend Three.js attend positions[] dans l'ordre :
+        # base, shoulder, elbow, wrist1, wrist2. Le hardware Yahboom M3 Pro
+        # peut publier dans un autre ordre — on garde les names en parallele
+        # pour que le front puisse reordonner si besoin.
+        payload = build_joint_states_payload(msg.name, msg.position)
+        self.mqtt.publish(f'{self.base}/telemetry/joint_states',
                           json.dumps(payload), qos=0, retain=False)
 
     def _on_mapping_state(self, msg):

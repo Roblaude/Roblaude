@@ -64,6 +64,7 @@ describe('RobotMqttAdapter — transport', () => {
         'roblaude/+/telemetry/#',
         'roblaude/+/status',
         'roblaude/+/mission/#',
+        'roblaude/+/mapping/#',
         'roblaude/+/connection',
       ],
       { qos: 1 },

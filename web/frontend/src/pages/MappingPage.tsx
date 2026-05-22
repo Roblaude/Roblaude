@@ -12,6 +12,9 @@ import { MappingSessionsList } from '../components/MappingSessionsList'
 import { TeleopPanel } from '../components/TeleopPanel'
 import { MapLive } from '../components/MapLive'
 import { DockBottom } from '../components/DockBottom'
+import { MiniMapPip } from '../components/MiniMapPip'
+import { listAnnotations, type Annotation } from '../lib/annotationsApi'
+import { listSessions } from '../lib/mappingApi'
 
 const STATE_LABEL: Record<string, { label: string; color: string }> = {
   IDLE: { label: 'En veille', color: 'bg-gray-700 text-gray-200' },
@@ -48,6 +51,42 @@ export function MappingPage() {
 
   const [busy, setBusy] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  // snapshot courant = dernier snapshot du robot (pour rattacher les annotations)
+  const [currentSnapshotId, setCurrentSnapshotId] = useState<number | null>(null)
+  const [annotations, setAnnotations] = useState<Annotation[]>([])
+
+  // resolve currentSnapshotId : on prend le dernier snapshot de la session
+  // active si elle a un snapshot, sinon on tente le dernier snapshot du robot.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const sessions = await listSessions(robotId)
+        for (const s of sessions) {
+          const c = s._count?.snapshots ?? 0
+          if (c > 0) {
+            // on n'a pas l'id direct ici — il faut un fetch supplementaire.
+            // Pour MVP : on garde currentSnapshotId null si pas dispo, l'utilisateur
+            // doit sauvegarder une carte pour creer des annotations.
+            // todo: endpoint snapshots/latest?robotId=...
+            return
+          }
+        }
+        if (!cancelled) setCurrentSnapshotId(null)
+      } catch {
+        /* ignore */
+      }
+    })()
+    return () => { cancelled = true }
+  }, [robotId, refreshKey])
+
+  useEffect(() => {
+    if (!currentSnapshotId) {
+      setAnnotations([])
+      return
+    }
+    void listAnnotations(currentSnapshotId).then(setAnnotations).catch(() => setAnnotations([]))
+  }, [currentSnapshotId])
 
   const onStart = async (): Promise<void> => {
     setBusy(true)
@@ -202,7 +241,11 @@ export function MappingPage() {
               </span>
             )}
           </div>
-          <MapLive />
+          <MapLive
+            currentSnapshotId={currentSnapshotId}
+            annotations={annotations}
+            onAnnotationCreated={(a) => setAnnotations((list) => [...list, a])}
+          />
         </div>
 
         <div className="space-y-4">
@@ -212,6 +255,7 @@ export function MappingPage() {
       </div>
 
       <DockBottom />
+      <MiniMapPip />
     </div>
   )
 }

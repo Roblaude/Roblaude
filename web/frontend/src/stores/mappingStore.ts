@@ -19,6 +19,7 @@ interface MappingStore {
   coveragePercent: number | null
   failureReason: string | null
   wsConnected: boolean
+  lastTelemetryAt: number | null
 
   setState: (state: MappingState) => void
   setSession: (sessionId: number | null) => void
@@ -28,6 +29,7 @@ interface MappingStore {
   setCoverage: (percent: number | null) => void
   setFailure: (reason: string | null) => void
   setWsConnected: (b: boolean) => void
+  setLastTelemetry: (ts: number) => void
   reset: () => void
 }
 
@@ -39,6 +41,7 @@ export const useMappingStore = create<MappingStore>((set, get) => ({
   coveragePercent: null,
   failureReason: null,
   wsConnected: false,
+  lastTelemetryAt: null,
 
   setState: (state) => set({ state }),
   setSession: (sessionId) => set({ sessionId }),
@@ -54,6 +57,7 @@ export const useMappingStore = create<MappingStore>((set, get) => ({
   setCoverage: (percent) => set({ coveragePercent: percent }),
   setFailure: (reason) => set({ failureReason: reason }),
   setWsConnected: (b) => set({ wsConnected: b }),
+  setLastTelemetry: (ts) => set({ lastTelemetryAt: ts }),
 
   reset: () => {
     const prev = get().mapPngUrl

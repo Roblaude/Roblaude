@@ -5,7 +5,10 @@ import { ArrowLeft, Play, Square, Save, Wifi, WifiOff, MapPin } from 'lucide-rea
 import { useRobotStore } from '../stores/robotStore'
 import { useMappingStore } from '../stores/mappingStore'
 import { useMappingTelemetry } from '../hooks/useMappingTelemetry'
+import { useMappingStaleness } from '../hooks/useStaleness'
 import { startMapping, stopMapping, saveMapping } from '../lib/mappingApi'
+import { MappingSessionsList } from '../components/MappingSessionsList'
+import { TeleopPanel } from '../components/TeleopPanel'
 
 const STATE_LABEL: Record<string, { label: string; color: string }> = {
   IDLE: { label: 'En veille', color: 'bg-gray-700 text-gray-200' },
@@ -23,8 +26,10 @@ export function MappingPage() {
 
   // ouvre le WS telemetry (carte live)
   useMappingTelemetry(robotId, true)
+  const stale = useMappingStaleness()
 
   const [busy, setBusy] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const onStart = async (): Promise<void> => {
     setBusy(true)
@@ -32,6 +37,7 @@ export function MappingPage() {
       const r = await startMapping(robotId)
       setMapping('STARTING', r.sessionId)
       toast.success(`Session ${r.sessionId} demarree`)
+      setRefreshKey((k) => k + 1)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'erreur start')
     } finally {
@@ -46,6 +52,7 @@ export function MappingPage() {
       await stopMapping(sessionId)
       setMapping('STOPPING', sessionId)
       toast.success('Arret demande')
+      setRefreshKey((k) => k + 1)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'erreur stop')
     } finally {
@@ -59,6 +66,7 @@ export function MappingPage() {
     try {
       const r = await saveMapping(sessionId)
       toast.success(`Carte sauvegardee (snapshot #${r.snapshotId})`)
+      setRefreshKey((k) => k + 1)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'erreur save')
     } finally {
@@ -85,7 +93,12 @@ export function MappingPage() {
             <p className="text-sm text-gray-500 mt-0.5">Cartographie SLAM live</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex items-center gap-3 text-sm">
+          {stale && (
+            <span className="px-2 py-0.5 rounded bg-yellow-600 text-white text-xs font-medium">
+              Perte signal robot
+            </span>
+          )}
           {wsConnected ? (
             <span className="flex items-center gap-1.5 text-green-400">
               <Wifi className="w-4 h-4" /> WS connecte
@@ -159,8 +172,9 @@ export function MappingPage() {
         </button>
       </div>
 
-      {/* Carte live */}
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
+      {/* Carte live + historique sessions cote a cote */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-lg p-4">
         <div className="flex items-center gap-2 mb-3">
           <MapPin className="w-4 h-4 text-gray-400" />
           <h2 className="text-sm font-medium text-gray-300">Carte SLAM live</h2>
@@ -179,6 +193,12 @@ export function MappingPage() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="space-y-4">
+        <TeleopPanel enabled={state === 'RUNNING' && wsConnected} />
+        <MappingSessionsList robotId={robotId} refreshKey={refreshKey} />
+      </div>
       </div>
     </div>
   )

@@ -13,7 +13,39 @@ export type MqttEvents = {
   position_update: { robotId: number; x: number; y: number; theta?: number }
   mission_update: { missionId: number; status: MissionStatus; progress?: number }
   mission_completed: { missionId: number; result: 'completed'|'failed'|'cancelled'; reason?: string }
-  // Les events mapping (map, scan, plan, ...) seront ajoutes en T3.5.5.
+  // === mapping (T3.5.5) ===
+  map_update: {
+    robotId: number
+    png: Buffer
+    meta: { width: number; height: number; resolution: number; originX: number; originY: number; stamp: number }
+  }
+  scan_update: { robotId: number; ranges: number[]; angleMin: number; angleIncrement: number; frameId: string }
+  plan_update: { robotId: number; poses: { x: number; y: number; theta: number }[] }
+  frontiers_update: { robotId: number; cells: { x: number; y: number; size: number }[] }
+  tf_update: {
+    robotId: number
+    frames: { id: string; parent: string; x: number; y: number; z: number; qx: number; qy: number; qz: number; qw: number }[]
+  }
+  mapping_state: {
+    robotId: number
+    state: 'STARTING' | 'RUNNING' | 'STOPPING' | 'STOPPED' | 'FAILED'
+    sessionId: number | null
+    startedAt?: number
+    coverageM2?: number
+    coveragePercent?: number
+    failureReason?: string
+  }
+  mapping_save_result: {
+    robotId: number
+    messageId?: string
+    ok: boolean
+    sessionId?: number
+    name?: string
+    pgm_base64?: string
+    yaml?: string
+    reason?: string
+  }
+  annotation_change: { robotId: number; action: 'created' | 'updated' | 'deleted'; annotation?: unknown; id?: number }
 }
 
 class TypedMqttEvents extends EventEmitter {

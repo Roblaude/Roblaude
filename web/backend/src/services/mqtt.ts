@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { MissionStatus, RobotStatus } from '@prisma/client'
 import { z } from 'zod'
 import prisma from '../lib/prisma'
-import { mqttEvents } from './mqttEvents'
+import { mqttEvents, type MqttEvents } from './mqttEvents'
 
 // Adaptateur MQTT du backend — singleton.
 // Topics et formats : voir docs/mqtt-spec.md
@@ -89,6 +89,10 @@ export type CmdAction =
   | 'resume'
   | 'loading-confirmed'
   | 'emergency-stop'
+  | 'mapping/start'
+  | 'mapping/stop'
+  | 'mapping/save'
+  | 'teleop'
 
 // Duree de vie d'un messageId dans le cache d'idempotence. Au-dela, le retry
 // du robot est traite comme un nouveau message. Le robot ne doit pas retry
@@ -157,6 +161,7 @@ class RobotMqttAdapter {
           'roblaude/+/telemetry/#',
           'roblaude/+/status',
           'roblaude/+/mission/#',
+          'roblaude/+/mapping/#',
           'roblaude/+/connection',
         ],
         { qos: 1 },
@@ -206,6 +211,12 @@ class RobotMqttAdapter {
     const [, robotIdRaw, family, sub] = topic.split('/')
     const robotId = Number(robotIdRaw)
 
+    // telemetry/map = PNG binaire, pas JSON. On route avant le JSON.parse.
+    if (family === 'telemetry' && sub === 'map') {
+      this.handleMap(robotId, payload)
+      return
+    }
+
     let data: Record<string, unknown>
     try {
       data = JSON.parse(payload.toString())
@@ -222,6 +233,11 @@ class RobotMqttAdapter {
       case 'telemetry':
         if (sub === 'battery') void this.handleBattery(robotId, data)
         else if (sub === 'position') void this.handlePosition(robotId, data)
+        else if (sub === 'map_meta') this.handleMapMeta(robotId, data)
+        else if (sub === 'scan') this.handleScan(robotId, data)
+        else if (sub === 'plan') this.handlePlan(robotId, data)
+        else if (sub === 'frontiers') this.handleFrontiers(robotId, data)
+        else if (sub === 'tf') this.handleTf(robotId, data)
         break
       case 'status':
         void this.handleStatus(robotId, data)
@@ -230,6 +246,10 @@ class RobotMqttAdapter {
         if (sub === 'ack') void this.handleMissionAck(robotId, data)
         else if (sub === 'status') void this.handleMissionStatus(data)
         else if (sub === 'result') void this.handleMissionResult(robotId, data)
+        break
+      case 'mapping':
+        if (sub === 'state') this.handleMappingState(robotId, data)
+        else if (sub === 'save-result') this.handleMappingSaveResult(robotId, data)
         break
       case 'connection':
         void this.handleConnection(robotId, data)
@@ -432,6 +452,137 @@ class RobotMqttAdapter {
       // L'echec NE marque PAS le messageId comme vu (cf. withIdempotence)
       console.error('[mqtt] update mission/result :',
         err instanceof Error ? err.message : err)
+    })
+  }
+
+  // === MAPPING (T3.5.5) ===
+  // map_meta (JSON) et map (PNG binaire) arrivent sur 2 topics differents.
+  // On fusionne par robotId : map_update n'est emis que quand on a les deux.
+  private mapMetaCache = new Map<number, MqttEvents['map_update']['meta']>()
+  private mapPngCache = new Map<number, Buffer>()
+
+  private handleMapMeta(robotId: number, data: Record<string, unknown>): void {
+    const schema = z.object({
+      width: z.number().int().positive(),
+      height: z.number().int().positive(),
+      resolution: z.number().positive(),
+      originX: z.number(),
+      originY: z.number(),
+      stamp: z.number(),
+    })
+    const parsed = schema.safeParse(data)
+    if (!parsed.success) {
+      console.warn('[mqtt] map_meta rejete :', parsed.error.issues)
+      return
+    }
+    this.mapMetaCache.set(robotId, parsed.data)
+    this.tryEmitMap(robotId)
+  }
+
+  private handleMap(robotId: number, png: Buffer): void {
+    this.mapPngCache.set(robotId, png)
+    this.tryEmitMap(robotId)
+  }
+
+  private tryEmitMap(robotId: number): void {
+    const meta = this.mapMetaCache.get(robotId)
+    const png = this.mapPngCache.get(robotId)
+    if (!meta || !png) return
+    mqttEvents.emit('map_update', { robotId, png, meta })
+  }
+
+  private handleScan(robotId: number, data: Record<string, unknown>): void {
+    const schema = z.object({
+      ranges: z.array(z.number()),
+      angleMin: z.number(),
+      angleIncrement: z.number(),
+      frameId: z.string(),
+    })
+    const parsed = schema.safeParse(data)
+    if (!parsed.success) {
+      console.warn('[mqtt] scan rejete :', parsed.error.issues)
+      return
+    }
+    mqttEvents.emit('scan_update', { robotId, ...parsed.data })
+  }
+
+  private handlePlan(robotId: number, data: Record<string, unknown>): void {
+    const schema = z.object({
+      poses: z.array(z.object({ x: z.number(), y: z.number(), theta: z.number() })),
+    })
+    const parsed = schema.safeParse(data)
+    if (!parsed.success) return
+    mqttEvents.emit('plan_update', { robotId, poses: parsed.data.poses })
+  }
+
+  private handleFrontiers(robotId: number, data: Record<string, unknown>): void {
+    const schema = z.object({
+      cells: z.array(z.object({ x: z.number(), y: z.number(), size: z.number() })),
+    })
+    const parsed = schema.safeParse(data)
+    if (!parsed.success) return
+    mqttEvents.emit('frontiers_update', { robotId, cells: parsed.data.cells })
+  }
+
+  private handleTf(robotId: number, data: Record<string, unknown>): void {
+    const schema = z.object({
+      frames: z.array(z.object({
+        id: z.string(),
+        parent: z.string(),
+        x: z.number(), y: z.number(), z: z.number(),
+        qx: z.number(), qy: z.number(), qz: z.number(), qw: z.number(),
+      })),
+    })
+    const parsed = schema.safeParse(data)
+    if (!parsed.success) return
+    mqttEvents.emit('tf_update', { robotId, frames: parsed.data.frames })
+  }
+
+  // mapping/state — STARTING / RUNNING / STOPPING / STOPPED / FAILED.
+  // Met aussi a jour MappingSession en DB si sessionId fourni.
+  private handleMappingState(robotId: number, data: Record<string, unknown>): void {
+    const schema = z.object({
+      state: z.enum(['STARTING', 'RUNNING', 'STOPPING', 'STOPPED', 'FAILED']),
+      sessionId: z.number().int().nullable(),
+      startedAt: z.number().optional(),
+      coverageM2: z.number().optional(),
+      coveragePercent: z.number().optional(),
+      failureReason: z.string().optional(),
+    })
+    const parsed = schema.safeParse(data)
+    if (!parsed.success) {
+      console.warn('[mqtt] mapping/state rejete :', parsed.error.issues)
+      return
+    }
+    if (parsed.data.sessionId !== null) {
+      const terminal = parsed.data.state === 'STOPPED' || parsed.data.state === 'FAILED'
+      prisma.mappingSession
+        .update({
+          where: { id: parsed.data.sessionId },
+          data: {
+            state: parsed.data.state,
+            ...(parsed.data.failureReason ? { failureReason: parsed.data.failureReason } : {}),
+            ...(terminal ? { endedAt: new Date(), coverageM2: parsed.data.coverageM2 ?? null } : {}),
+          },
+        })
+        .catch((err) => console.error('[mqtt] update mapping session :',
+          err instanceof Error ? err.message : err))
+    }
+    mqttEvents.emit('mapping_state', { robotId, ...parsed.data })
+  }
+
+  // mapping/save-result — le bridge robot renvoie le PGM en base64 + YAML.
+  // Le mappingController attend cet event via mqttEvents pour committer en DB.
+  private handleMappingSaveResult(robotId: number, data: Record<string, unknown>): void {
+    mqttEvents.emit('mapping_save_result', {
+      robotId,
+      messageId: data.messageId as string | undefined,
+      ok: Boolean(data.ok),
+      sessionId: data.sessionId as number | undefined,
+      name: data.name as string | undefined,
+      pgm_base64: data.pgm_base64 as string | undefined,
+      yaml: data.yaml as string | undefined,
+      reason: data.reason as string | undefined,
     })
   }
 

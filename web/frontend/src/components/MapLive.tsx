@@ -1,19 +1,38 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Maximize2, Minimize2, Layers } from 'lucide-react'
+import { Maximize2, Minimize2, Layers, MapPin as MapPinIcon } from 'lucide-react'
+import { toast } from 'sonner'
 import { useMappingStore } from '@/stores/mappingStore'
-import { worldToPixel } from '@/lib/mapProjection'
+import { worldToPixel, pixelToWorld } from '@/lib/mapProjection'
+import { getHeatmapCells, recordVisit, CELL_SIZE_M } from '@/lib/heatmapAccumulator'
+import { createAnnotation, type Annotation } from '@/lib/annotationsApi'
 
-// Carte SLAM live avec overlay canvas (scan laser, plan, frontiers, robot pose).
-// Mode plein ecran via Fullscreen API.
+// Carte SLAM live avec overlay canvas (scan, plan, frontiers, trail, heatmap)
+// + annotations cliquables + mode plein ecran.
 
 interface LayerToggles {
   scan: boolean
   plan: boolean
   frontiers: boolean
   trail: boolean
+  heatmap: boolean
+  annotations: boolean
 }
 
-export function MapLive() {
+interface PendingAnnotation {
+  x: number
+  y: number
+  pxX: number
+  pxY: number
+}
+
+interface Props {
+  // permet a la page de fournir un snapshotId pour creer des annotations.
+  currentSnapshotId?: number | null
+  annotations?: Annotation[]
+  onAnnotationCreated?: (a: Annotation) => void
+}
+
+export function MapLive({ currentSnapshotId = null, annotations = [], onAnnotationCreated }: Props) {
   const { mapPngUrl, mapMeta, scan, plan, frontiers, trail, robotPose } = useMappingStore()
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -23,8 +42,12 @@ export function MapLive() {
     plan: true,
     frontiers: true,
     trail: true,
+    heatmap: false,
+    annotations: true,
   })
   const [showLayerMenu, setShowLayerMenu] = useState(false)
+  const [pending, setPending] = useState<PendingAnnotation | null>(null)
+  const [pendingLabel, setPendingLabel] = useState('')
 
   const toggleFullscreen = useCallback((): void => {
     const el = containerRef.current
@@ -41,6 +64,12 @@ export function MapLive() {
     document.addEventListener('fullscreenchange', onFs)
     return () => document.removeEventListener('fullscreenchange', onFs)
   }, [])
+
+  // accumule les visites du robot pour la heatmap
+  useEffect(() => {
+    if (!robotPose) return
+    recordVisit(robotPose.x, robotPose.y)
+  }, [robotPose])
 
   // redessine le canvas a chaque changement de scan/plan/trail/etc.
   useEffect(() => {
@@ -113,6 +142,19 @@ export function MapLive() {
       }
     }
 
+    // heatmap (sous le scan pour ne pas masquer)
+    if (layers.heatmap) {
+      const cells = getHeatmapCells()
+      const maxVisits = cells.reduce((m, c) => Math.max(m, c.visits), 1)
+      const cellPx = CELL_SIZE_M / mapMeta.resolution
+      for (const c of cells) {
+        const intensity = Math.min(1, c.visits / maxVisits)
+        ctx.fillStyle = `rgba(251, 191, 36, ${0.15 + intensity * 0.5})`
+        const pt = worldToPixel(mapMeta, c.x - CELL_SIZE_M / 2, c.y + CELL_SIZE_M / 2)
+        ctx.fillRect(pt.x, pt.y, cellPx, cellPx)
+      }
+    }
+
     // scan laser
     if (layers.scan && scan && robotPose) {
       ctx.fillStyle = 'rgba(248, 113, 113, 0.9)'
@@ -126,7 +168,61 @@ export function MapLive() {
         ctx.fillRect(pt.x - 0.5, pt.y - 0.5, 1.5, 1.5)
       }
     }
-  }, [mapMeta, scan, plan, frontiers, trail, robotPose, layers])
+
+    // annotations (au-dessus de tout pour rester visibles)
+    if (layers.annotations && annotations.length > 0) {
+      ctx.font = '11px monospace'
+      for (const a of annotations) {
+        const pt = worldToPixel(mapMeta, a.x, a.y)
+        ctx.fillStyle = a.color ?? '#3b82f6'
+        ctx.beginPath()
+        ctx.arc(pt.x, pt.y, 6, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.strokeStyle = '#ffffff'
+        ctx.lineWidth = 1
+        ctx.stroke()
+        // label en blanc avec ombre
+        ctx.fillStyle = 'rgba(0,0,0,0.7)'
+        ctx.fillRect(pt.x + 8, pt.y - 12, ctx.measureText(a.label).width + 6, 16)
+        ctx.fillStyle = '#ffffff'
+        ctx.fillText(a.label, pt.x + 11, pt.y)
+      }
+    }
+  }, [mapMeta, scan, plan, frontiers, trail, robotPose, layers, annotations])
+
+  // clic sur la carte pour creer une annotation (si snapshot disponible)
+  const onCanvasClick = useCallback((e: React.MouseEvent<HTMLDivElement>): void => {
+    if (!currentSnapshotId || !mapMeta) return
+    const img = (e.currentTarget.querySelector('img') as HTMLImageElement | null)
+    if (!img) return
+    const rect = img.getBoundingClientRect()
+    const xRatio = (e.clientX - rect.left) / rect.width
+    const yRatio = (e.clientY - rect.top) / rect.height
+    // l'img est rendue redimensionnee — on remappe sur les coords natives
+    const pxX = xRatio * mapMeta.width
+    const pxY = yRatio * mapMeta.height
+    const world = pixelToWorld(mapMeta, pxX, pxY)
+    setPending({ x: world.x, y: world.y, pxX, pxY })
+    setPendingLabel('')
+  }, [currentSnapshotId, mapMeta])
+
+  const submitAnnotation = useCallback(async (): Promise<void> => {
+    if (!pending || !pendingLabel || !currentSnapshotId) return
+    try {
+      const a = await createAnnotation({
+        mapSnapshotId: currentSnapshotId,
+        label: pendingLabel,
+        x: pending.x,
+        y: pending.y,
+      })
+      toast.success(`Annotation "${a.label}" creee`)
+      onAnnotationCreated?.(a)
+      setPending(null)
+      setPendingLabel('')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'erreur annotation')
+    }
+  }, [pending, pendingLabel, currentSnapshotId, onAnnotationCreated])
 
   return (
     <div
@@ -146,8 +242,8 @@ export function MapLive() {
             <Layers className="w-4 h-4" />
           </button>
           {showLayerMenu && (
-            <div className="absolute top-full right-0 mt-1 bg-gray-900 border border-gray-700 rounded p-2 text-xs space-y-1 min-w-[120px]">
-              {(['scan', 'plan', 'frontiers', 'trail'] as const).map((k) => (
+            <div className="absolute top-full right-0 mt-1 bg-gray-900 border border-gray-700 rounded p-2 text-xs space-y-1 min-w-[140px]">
+              {(['scan', 'plan', 'frontiers', 'trail', 'heatmap', 'annotations'] as const).map((k) => (
                 <label key={k} className="flex items-center gap-2 text-gray-200 cursor-pointer">
                   <input
                     type="checkbox"
@@ -169,7 +265,10 @@ export function MapLive() {
         </button>
       </div>
 
-      <div className="relative inline-block">
+      <div
+        className={`relative inline-block ${currentSnapshotId ? 'cursor-crosshair' : ''}`}
+        onClick={onCanvasClick}
+      >
         {mapPngUrl ? (
           <>
             <img
@@ -183,6 +282,44 @@ export function MapLive() {
               className="absolute inset-0 w-full h-full pointer-events-none"
               style={{ imageRendering: 'pixelated' }}
             />
+            {pending && (
+              <div
+                className="absolute z-20 bg-gray-900 border border-gray-700 rounded p-2 shadow-xl"
+                style={{
+                  left: `${(pending.pxX / (mapMeta?.width ?? 1)) * 100}%`,
+                  top: `${(pending.pxY / (mapMeta?.height ?? 1)) * 100}%`,
+                  transform: 'translate(8px, 8px)',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center gap-2">
+                  <MapPinIcon className="w-3 h-3 text-blue-400" />
+                  <input
+                    autoFocus
+                    value={pendingLabel}
+                    onChange={(e) => setPendingLabel(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void submitAnnotation()
+                      if (e.key === 'Escape') setPending(null)
+                    }}
+                    placeholder="label"
+                    className="bg-black border border-gray-700 rounded px-2 py-0.5 text-xs text-white w-32"
+                  />
+                  <button
+                    onClick={() => void submitAnnotation()}
+                    className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-0.5 rounded"
+                  >
+                    OK
+                  </button>
+                  <button
+                    onClick={() => setPending(null)}
+                    className="text-xs text-gray-400 hover:text-white px-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <div className="text-gray-600 text-sm py-24 px-12">

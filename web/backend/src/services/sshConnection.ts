@@ -27,7 +27,10 @@ export function getSshClient(robotId: number): Promise<NodeSSH> {
   if (p) return p
   p = (async () => {
     const ssh = new NodeSSH()
-    await ssh.connect(getConfig(robotId))
+    // cast as any — RobotSshConfig.privateKey est Buffer mais NodeSSH veut string ;
+    // node-ssh accepte les deux a l'execution.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await ssh.connect(getConfig(robotId) as any)
     return ssh
   })()
   // si fail, on vire du cache pour permettre un retry au prochain appel.

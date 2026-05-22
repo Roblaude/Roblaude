@@ -4,6 +4,7 @@ import { ArrowLeft, Terminal, RefreshCw, FileText, Shield } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRobotStore } from '../stores/robotStore'
 import { fetchSshAudit, fetchRobotLogs, execSsh, type SshAuditEntry } from '../lib/sshApi'
+import { SshTerminal } from '../components/SshTerminal'
 
 // Page admin /admin/ssh. Affiche :
 // - les derniers audits SSH (qui a lance quoi quand)
@@ -86,6 +87,9 @@ export function AdminSshPage() {
           <Shield className="w-4 h-4" /> admin uniquement
         </span>
       </div>
+
+      {/* Terminal interactif xterm.js */}
+      <SshTerminal robotId={robotId} />
 
       {/* Console allowlist */}
       <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">

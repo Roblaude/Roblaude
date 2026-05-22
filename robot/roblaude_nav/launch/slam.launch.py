@@ -26,6 +26,16 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     return LaunchDescription([
+        # scan_restamper : fix le drift +500ms des drivers LiDAR Yahboom.
+        # /scan_multi (drivers + merger, stamp dans le futur) -> /scan_fixed (now()).
+        # Indispensable pour que slam_toolbox puisse matcher les scans (sinon queue full
+        # infinie car TF cache n'a jamais d'entree au futur).
+        Node(
+            package='roblaude_nav',
+            executable='scan_restamper',
+            name='scan_restamper',
+            output='screen',
+        ),
         Node(
             package='slam_toolbox',
             executable='async_slam_toolbox_node',
@@ -34,15 +44,19 @@ def generate_launch_description():
             parameters=[{
                 'use_sim_time': False,           # False = hardware reel
                 'odom_frame': 'odom',
-                'base_frame': 'base_link',
+                'base_frame': 'base_footprint',  # PAS base_link — sinon chicken-and-egg avec map.
                 'map_frame': 'map',
-                'scan_topic': '/scan_multi',     # fusion /scan0+/scan1 par ira_laser_tools (lance par base_bringup)
-                'mode': 'mapping',               # 'mapping' ou 'localization'
+                'scan_topic': '/scan_fixed',     # restampe par scan_restamper (cf node au-dessus)
+                'mode': 'mapping',
                 'resolution': 0.05,              # 5 cm par pixel
-                'max_laser_range': 8.0,          # metres (YDLidar)
-                'minimum_time_interval': 0.2,    # secondes
-                'transform_publish_period': 0.05,
-                'map_update_interval': 5.0,
+                'min_laser_range': 0.3,          # ignore < 30cm : le bras M3 Pro retombe devant le LiDAR
+                                                 # et est detecte comme obstacle fictif (vu IRL 22 mai).
+                'max_laser_range': 4.0,          # capacite reelle merger Yahboom (warning slam si plus)
+                'minimum_time_interval': 0.5,
+                'transform_publish_period': 0.02,
+                'map_update_interval': 3.0,
+                'scan_buffer_size': 10,
+                'transform_timeout': 0.5,
             }]
         ),
     ])

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useAuthStore } from '@/stores/authStore'
-import { useMappingStore, type MapMeta, type MappingState } from '@/stores/mappingStore'
+import { useMappingStore, type MapMeta, type MappingState, type Pose, type Frontier } from '@/stores/mappingStore'
 
 // Ouvre /ws/robots/:id/telemetry et alimente mappingStore.
 // PNG arrive en frame BINARY prefixee d'un byte de type (0x01 = map png),
@@ -19,6 +19,9 @@ export function useMappingTelemetry(robotId: number, enabled: boolean): void {
   const setFailure = useMappingStore((s) => s.setFailure)
   const setWsConnected = useMappingStore((s) => s.setWsConnected)
   const setLastTelemetry = useMappingStore((s) => s.setLastTelemetry)
+  const setScan = useMappingStore((s) => s.setScan)
+  const setPlan = useMappingStore((s) => s.setPlan)
+  const setFrontiers = useMappingStore((s) => s.setFrontiers)
   const wsRef = useRef<WebSocket | null>(null)
   const cancelledRef = useRef(false)
   const retryCountRef = useRef(0)
@@ -83,7 +86,19 @@ export function useMappingTelemetry(robotId: number, enabled: boolean): void {
             if (typeof msg.failureReason === 'string') setFailure(msg.failureReason)
             else if (msg.state !== 'FAILED') setFailure(null)
             break
-          // scan / plan / frontiers : ignores pour MVP demo
+          case 'scan':
+            setScan({
+              ranges: msg.ranges as number[],
+              angleMin: msg.angleMin as number,
+              angleIncrement: msg.angleIncrement as number,
+            })
+            break
+          case 'plan':
+            setPlan((msg.poses ?? []) as Pose[])
+            break
+          case 'frontiers':
+            setFrontiers((msg.cells ?? []) as Frontier[])
+            break
         }
       }
     }
@@ -98,7 +113,7 @@ export function useMappingTelemetry(robotId: number, enabled: boolean): void {
       currentWs = null
       setWsConnected(false)
     }
-  }, [robotId, enabled, token, setMapPng, setMapMeta, setMapping, setCoverage, setFailure, setWsConnected, setLastTelemetry])
+  }, [robotId, enabled, token, setMapPng, setMapMeta, setMapping, setCoverage, setFailure, setWsConnected, setLastTelemetry, setScan, setPlan, setFrontiers])
 }
 
 // module-level ref vers le WS courant — utilise par sendTeleop (item teleop UI).

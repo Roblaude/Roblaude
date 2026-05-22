@@ -7,6 +7,7 @@ import { MissionDetailPage } from './pages/MissionDetailPage'
 import { NewMissionPage } from './pages/NewMissionPage'
 import { AdminPage } from './pages/AdminPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { MappingPage } from './pages/MappingPage'
 import { LoginPage } from './pages/LoginPage'
 import { RequireAuth } from './components/RequireAuth'
 import { useAuthStore } from './stores/authStore'
@@ -34,6 +35,7 @@ export default function App() {
               element={role === 'ADMIN' ? <AdminPage /> : <Navigate to="/" replace />}
             />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/mapping" element={<MappingPage />} />
           </Route>
         </Route>
 

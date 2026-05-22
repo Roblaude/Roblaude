@@ -49,6 +49,8 @@ def generate_launch_description():
                 'scan_topic': '/scan_fixed',     # restampe par scan_restamper (cf node au-dessus)
                 'mode': 'mapping',
                 'resolution': 0.05,              # 5 cm par pixel
+                'min_laser_range': 0.3,          # ignore < 30cm : le bras M3 Pro retombe devant le LiDAR
+                                                 # et est detecte comme obstacle fictif (vu IRL 22 mai).
                 'max_laser_range': 4.0,          # capacite reelle merger Yahboom (warning slam si plus)
                 'minimum_time_interval': 0.5,
                 'transform_publish_period': 0.02,

@@ -216,3 +216,36 @@ body {
   outline-offset: 2px;
   border-radius: 2px;
 }
+
+
+/* ============================================================
+   Theme ARCADE (toggle via class .theme-arcade sur <body>)
+   Scanlines CRT + glow neon + accent cyan.
+   ============================================================ */
+
+body.theme-arcade {
+  --primary: oklch(0.78 0.18 200);  /* cyan neon */
+  --accent-legacy: #00ffff;
+}
+
+body.theme-arcade::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 255, 255, 0.03) 0,
+    rgba(0, 255, 255, 0.03) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  pointer-events: none;
+  z-index: 1000;
+  mix-blend-mode: overlay;
+}
+
+body.theme-arcade h1,
+body.theme-arcade h2,
+body.theme-arcade .text-foreground {
+  text-shadow: 0 0 8px rgba(0, 255, 255, 0.4);
+}

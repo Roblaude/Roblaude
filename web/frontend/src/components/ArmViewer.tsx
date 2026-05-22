@@ -99,20 +99,16 @@ export function ArmViewer({ robotId, enabled = true }: Props) {
 
     sceneRef.current = { scene, camera, renderer, joints: [base, shoulder, elbow, wrist1, wrist2] }
 
+    // Pose de repos par defaut — bras un peu plie vers l'avant pour ne pas
+    // ressembler a un poteau droit, mais STATIQUE (pas d'auto-anim).
+    // Quand joint_states reels arrivent, ils ecrasent ces valeurs.
+    shoulder.rotation.x = -0.3
+    elbow.rotation.x = 0.8
+    wrist1.rotation.x = -0.2
+
     let rafId: number
-    const t0 = performance.now()
     const animate = (): void => {
       rafId = requestAnimationFrame(animate)
-      const t = (performance.now() - t0) / 1000
-      // si pas de data reelle, anime sinusoidal — verification visuelle ca tourne
-      const ref = sceneRef.current
-      if (ref && !hasRealData) {
-        ref.joints[0].rotation.y = Math.sin(t * 0.5) * 0.8
-        ref.joints[1].rotation.x = Math.sin(t * 0.7) * 0.4 - 0.3
-        ref.joints[2].rotation.x = Math.sin(t * 0.9 + 1) * 0.5 + 0.5
-        ref.joints[3].rotation.x = Math.sin(t * 1.1 + 2) * 0.4
-        ref.joints[4].rotation.y = Math.sin(t * 1.3) * 0.6
-      }
       renderer.render(scene, camera)
     }
     animate()
@@ -134,7 +130,7 @@ export function ArmViewer({ robotId, enabled = true }: Props) {
       container.removeChild(renderer.domElement)
       sceneRef.current = null
     }
-  }, [enabled, hasRealData])
+  }, [enabled])
 
   // listen joint_states via WS telemetry (re-utilise le meme endpoint)
   useEffect(() => {
@@ -198,8 +194,8 @@ export function ArmViewer({ robotId, enabled = true }: Props) {
       <div className="flex items-center justify-between bg-gray-900 px-2 py-1 border-b border-gray-800">
         <div className="flex items-center gap-1.5 text-xs text-gray-300">
           <Bot className="w-3 h-3" /> Bras 3D
-          <span className={`text-[10px] ${hasRealData ? 'text-green-400' : 'text-yellow-400'}`}>
-            {hasRealData ? 'live' : 'demo'}
+          <span className={`text-[10px] ${hasRealData ? 'text-green-400' : 'text-gray-500'}`}>
+            {hasRealData ? 'live' : 'pose repos'}
           </span>
         </div>
         <div className="flex items-center gap-1">

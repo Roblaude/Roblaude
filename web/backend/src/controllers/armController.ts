@@ -38,15 +38,28 @@ const armSchema = z.object({
 //   joint5 : poignet yaw (rotation finale)
 //   joint6 : pince (0 = ouverte, 180 = fermee)
 
+// IMPORTANT : la convention angulaire Yahboom (signe positif/negatif des
+// servos) n'est PAS validee physiquement. Ces valeurs sont une premiere
+// approximation et DOIVENT etre ajustees par l'utilisateur via la fonction
+// de calibration cote frontend (bouton "Enregistrer pose courante").
+//
+// Symptome observe en demo (PR #256) : preset startup envoyait le bras
+// fortement vers le bas alors qu'on voulait juste un leger flechissement,
+// suggerant que joint2 negatif = abaisser, pas lever (inverse de ce que
+// j'avais suppose).
+//
+// Time augmente a 3000ms par defaut = mouvement doux, sans a-coup.
+
 export const ARM_PRESETS = {
-  // Position quand le robot s'allume : bras pret a travailler,
-  // legerement plie vers l'avant, pince mi-ouverte.
-  startup: { joint1: 0, joint2: -30, joint3: 60, joint4: 30, joint5: 0, joint6: 90, time: 1500 },
-  // Position avant extinction : bras replie sur lui-meme contre le corps,
-  // pince fermee. Evite que le bras tombe / traine au sol au shutdown.
-  shutdown: { joint1: 0, joint2: 80, joint3: -80, joint4: 0, joint5: 0, joint6: 180, time: 1500 },
-  // Reference de calibration : bras tout droit vertical.
-  vertical: { joint1: 0, joint2: -90, joint3: 0, joint4: 0, joint5: 0, joint6: 90, time: 2000 },
+  // Position au demarrage : valeurs prudentes proches du repos
+  // (pas de gros mouvement tant que pas calibre).
+  startup: { joint1: 0, joint2: 0, joint3: 0, joint4: 0, joint5: 0, joint6: 90, time: 3000 },
+  // Position avant extinction : bras replie sur lui-meme, pince fermee.
+  // A valider physiquement par l'utilisateur.
+  shutdown: { joint1: 0, joint2: 60, joint3: -60, joint4: 0, joint5: 0, joint6: 180, time: 3000 },
+  // Reference "verticale" : bras tout droit pointant vers le haut.
+  // Si en pratique ca pointe ailleurs, l'utilisateur doit ajuster.
+  vertical: { joint1: 0, joint2: -90, joint3: 0, joint4: 0, joint5: 0, joint6: 90, time: 3000 },
 } as const
 
 type PresetName = keyof typeof ARM_PRESETS

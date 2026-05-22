@@ -32,7 +32,7 @@ const SLIDERS = [
 
 export function ArmController({ robotId }: Props) {
   const [pose, setPose] = useState<ArmCommand>(REST_POSE)
-  const [timeMs, setTimeMs] = useState(500)
+  const [timeMs, setTimeMs] = useState(1500)  // 1.5s par defaut, mouvement doux
   const [busy, setBusy] = useState(false)
   const [armed, setArmed] = useState(false)  // safety toggle
   const lastSentRef = useRef<number>(0)
@@ -171,10 +171,15 @@ export function ArmController({ robotId }: Props) {
         </button>
       </div>
 
-      {/* Presets calibres par rapport au repere physique "bras vertical" */}
+      {/* Presets pre-configures. Convention angulaire non encore validee :
+          l'utilisateur doit confirmer les valeurs par essai et eventuellement
+          enregistrer ses propres poses via le store local (todo). */}
       <div className="border-t border-gray-800 pt-2">
-        <div className="text-[10px] text-gray-500 mb-1.5 font-mono uppercase tracking-wider">
-          Poses prédéfinies
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="text-[10px] text-gray-500 font-mono uppercase tracking-wider">
+            Poses prédéfinies
+          </div>
+          <span className="text-[9px] text-yellow-500">non calibrées</span>
         </div>
         <div className="grid grid-cols-3 gap-1">
           <button

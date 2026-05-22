@@ -2,6 +2,7 @@ import 'dotenv/config'
 import http from 'node:http'
 import { app } from './app'
 import { robotMqtt } from './services/mqtt'
+import { wsRouter } from './services/wsRouter'
 import { wsRelay } from './services/websocket'
 
 const PORT = process.env.PORT || 3001
@@ -9,7 +10,10 @@ const PORT = process.env.PORT || 3001
 // HTTP server explicite (createServer) pour pouvoir attacher le WS dessus
 // (upgrade handshake). app.listen ne donne pas acces au server.
 const server = http.createServer(app)
-wsRelay.attach(server)
+// wsRouter prend la main sur l'event 'upgrade' (un seul listener).
+// wsRelay s'enregistre comme handler du path /ws via wsRouter.
+wsRouter.attach(server)
+wsRelay.register()
 
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)

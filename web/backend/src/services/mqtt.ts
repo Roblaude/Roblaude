@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { MissionStatus, RobotStatus } from '@prisma/client'
 import { z } from 'zod'
 import prisma from '../lib/prisma'
-import { wsRelay } from './websocket'
+import { mqttEvents } from './mqttEvents'
 
 // Adaptateur MQTT du backend — singleton.
 // Topics et formats : voir docs/mqtt-spec.md
@@ -252,8 +252,7 @@ class RobotMqttAdapter {
         where: { id: robotId },
         data: { battery: parsed.data.percent },
       })
-      wsRelay.broadcast({
-        type: 'battery_update',
+      mqttEvents.emit('battery_update', {
         robotId,
         percent: parsed.data.percent,
       })
@@ -280,8 +279,7 @@ class RobotMqttAdapter {
           heading: parsed.data.theta ?? null,
         },
       })
-      wsRelay.broadcast({
-        type: 'position_update',
+      mqttEvents.emit('position_update', {
         robotId,
         x: parsed.data.x,
         y: parsed.data.y,
@@ -306,8 +304,7 @@ class RobotMqttAdapter {
         where: { id: robotId },
         data: { status: parsed.data.state as RobotStatus },
       })
-      wsRelay.broadcast({
-        type: 'status_change',
+      mqttEvents.emit('status_change', {
         robotId,
         status: parsed.data.state,
       })
@@ -333,13 +330,13 @@ class RobotMqttAdapter {
           where: { id: robotId },
           data: { status: RobotStatus.OFFLINE },
         })
-        wsRelay.broadcast({ type: 'robot_offline', robotId })
+        mqttEvents.emit('robot_offline', { robotId })
       } else {
         await prisma.robot.updateMany({
           where: { id: robotId, status: RobotStatus.OFFLINE },
           data: { status: RobotStatus.AVAILABLE },
         })
-        wsRelay.broadcast({ type: 'robot_online', robotId })
+        mqttEvents.emit('robot_online', { robotId })
       }
     } catch (err) {
       console.error('[mqtt] update connection :',
@@ -390,8 +387,7 @@ class RobotMqttAdapter {
         where: { id: missionId },
         data: { status: state },
       })
-      wsRelay.broadcast({
-        type: 'mission_update',
+      mqttEvents.emit('mission_update', {
         missionId,
         status: state,
         progress,
@@ -423,14 +419,12 @@ class RobotMqttAdapter {
           data: { status: RobotStatus.AVAILABLE },
         }),
       ])
-      wsRelay.broadcast({
-        type: 'mission_completed',
+      mqttEvents.emit('mission_completed', {
         missionId,
         result,
         reason,
       })
-      wsRelay.broadcast({
-        type: 'status_change',
+      mqttEvents.emit('status_change', {
         robotId,
         status: RobotStatus.AVAILABLE,
       })

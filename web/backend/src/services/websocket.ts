@@ -1,8 +1,8 @@
 import { WebSocketServer, WebSocket } from 'ws'
-import type { Server as HttpServer, IncomingMessage } from 'node:http'
-import jwt from 'jsonwebtoken'
+import type { IncomingMessage } from 'node:http'
 import { MissionStatus, RobotStatus } from '@prisma/client'
-import { getJwtSecret } from '../middleware/auth'
+import { wsRouter } from './wsRouter'
+import { mqttEvents } from './mqttEvents'
 
 // Service relay : MQTT/Prisma -> WebSocket -> clients frontend.
 // Singleton, attache sur le meme HTTP server qu'Express.
@@ -25,35 +25,14 @@ class WebSocketRelay {
   private wss: WebSocketServer | null = null
   private clients = new Set<WebSocket>()
 
-  /** Attache le WS server sur l'instance HTTP d'Express (path /ws). */
-  attach(httpServer: HttpServer): void {
-    if (this.wss) return // singleton
+  /** S'enregistre comme handler du path /ws sur le router commun.
+   * Aussi : s'abonne aux mqttEvents pour rebroadcaster aux clients. */
+  register(): void {
+    if (this.wss) return
 
     this.wss = new WebSocketServer({ noServer: true })
 
-    httpServer.on('upgrade', (req, socket, head) => {
-      // Match strict /ws (pas /wsfoo) — pathname exact
-      if (!req.url) return socket.destroy()
-      const url = new URL(req.url, `http://${req.headers.host}`)
-      if (url.pathname !== '/ws') return socket.destroy()
-
-      // Auth JWT en query param (limitation browser : pas de header
-      // custom au moment de l'open WS). Connu : le token peut apparaitre
-      // dans des logs reverse-proxy — durcir TLS + log filtering en prod.
-      const token = url.searchParams.get('token')
-      if (!token) {
-        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
-        socket.destroy()
-        return
-      }
-      try {
-        jwt.verify(token, getJwtSecret())
-      } catch {
-        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
-        socket.destroy()
-        return
-      }
-
+    wsRouter.register('/ws', ({ req, socket, head }) => {
       this.wss!.handleUpgrade(req, socket, head, (ws) => {
         this.wss!.emit('connection', ws, req)
       })
@@ -68,7 +47,16 @@ class WebSocketRelay {
       })
     })
 
-    console.log('[ws] WebSocket relay attache sur /ws')
+    // Re-broadcast mqttEvents -> clients /ws
+    mqttEvents.on('battery_update', (e) => this.broadcast({ type: 'battery_update', ...e }))
+    mqttEvents.on('status_change',  (e) => this.broadcast({ type: 'status_change', ...e }))
+    mqttEvents.on('robot_online',   (e) => this.broadcast({ type: 'robot_online', ...e }))
+    mqttEvents.on('robot_offline',  (e) => this.broadcast({ type: 'robot_offline', ...e }))
+    mqttEvents.on('position_update',(e) => this.broadcast({ type: 'position_update', ...e }))
+    mqttEvents.on('mission_update', (e) => this.broadcast({ type: 'mission_update', ...e }))
+    mqttEvents.on('mission_completed', (e) => this.broadcast({ type: 'mission_completed', ...e }))
+
+    console.log('[ws] WebSocket relay /ws enregistre')
   }
 
   /** Diffuse un evenement a tous les clients connectes (qui sont OPEN).

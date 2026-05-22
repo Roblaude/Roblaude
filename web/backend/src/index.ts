@@ -7,6 +7,7 @@ import { wsRelay } from './services/websocket'
 import { wsTelemetry } from './services/wsTelemetry'
 import { wsTf } from './services/wsTf'
 import { wsTopics } from './services/wsTopics'
+import { wsSsh } from './services/wsSsh'
 
 const PORT = process.env.PORT || 3001
 
@@ -20,6 +21,7 @@ wsRelay.register()
 wsTelemetry.register()
 wsTf.register()
 wsTopics.register()
+wsSsh.register()
 
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
@@ -34,6 +36,7 @@ function shutdown(signal: string) {
   wsTelemetry.close()
   wsTf.close()
   wsTopics.stop()
+  wsSsh.close()
   server.close(() => process.exit(0))
 }
 

@@ -85,9 +85,14 @@ spawn_once() {
 spawn_once base_bringup ros2 launch M3Pro_navigation base_bringup.launch.py
 sleep 5
 
-# --- 2) URDF officiel Yahboom (frame chassis pour TF) ---
-spawn_once rsp ros2 launch yahboom_M3Pro_description display_launch.py
-sleep 2
+# --- 2) URDF officiel Yahboom (frame chassis pour TF) — DESACTIVE ---
+# base_bringup.launch.py (etape 1) lance deja robot_state_publisher et
+# joint_state_publisher avec l'URDF Yahboom complet (14 frames dans /tf_static
+# verifie en reel le 22 mai). display_launch.py les relancait en doublon, ce
+# qui castait /tf_static (conflit QoS transient_local) -> chaine TF cassee ->
+# slam_toolbox bloque "queue full" -> pas de mapping. On le coupe.
+# spawn_once rsp ros2 launch yahboom_M3Pro_description display_launch.py
+# sleep 2
 
 # --- 3) Bridge MQTT (lit /etc/roblaude/broker_ip pour le host) ---
 if [ -f "$ROBLAUDE_WS/install/roblaude_mqtt/share/roblaude_mqtt/launch/mqtt_bridge.launch.py" ]; then

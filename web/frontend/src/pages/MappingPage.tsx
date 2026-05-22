@@ -13,6 +13,8 @@ import { TeleopPanel } from '../components/TeleopPanel'
 import { MapLive } from '../components/MapLive'
 import { DockBottom } from '../components/DockBottom'
 import { MiniMapPip } from '../components/MiniMapPip'
+import { CameraView } from '../components/CameraView'
+import { ArmViewer } from '../components/ArmViewer'
 import { listAnnotations, type Annotation } from '../lib/annotationsApi'
 import { listSessions } from '../lib/mappingApi'
 
@@ -256,6 +258,8 @@ export function MappingPage() {
 
       <DockBottom />
       <MiniMapPip />
+      <CameraView robotId={robotId} />
+      <ArmViewer robotId={robotId} />
     </div>
   )
 }

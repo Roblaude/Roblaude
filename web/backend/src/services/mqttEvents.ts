@@ -46,6 +46,9 @@ export type MqttEvents = {
     reason?: string
   }
   annotation_change: { robotId: number; action: 'created' | 'updated' | 'deleted'; annotation?: unknown; id?: number }
+  // === peripheriques (camera + bras) ===
+  camera_frame: { robotId: number; jpeg: Buffer }
+  joint_states: { robotId: number; positions: number[]; names?: string[] }
 }
 
 class TypedMqttEvents extends EventEmitter {

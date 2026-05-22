@@ -14,11 +14,14 @@ import { DegradedModeBanner } from './components/DegradedModeBanner'
 import { RequireAuth } from './components/RequireAuth'
 import { useAuthStore } from './stores/authStore'
 import { useWebSocket } from './hooks/useWebSocket'
+import { useGlobalEffects } from './hooks/useGlobalEffects'
 
 export default function App() {
   const role = useAuthStore((s) => s.user?.role)
   // ouvre la connexion WS au login, ferme au logout — singleton
   useWebSocket()
+  // sons + notifs sur events critiques
+  useGlobalEffects()
   return (
     <>
       <DegradedModeBanner />

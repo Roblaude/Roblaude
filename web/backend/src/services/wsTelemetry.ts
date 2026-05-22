@@ -15,6 +15,7 @@ import prisma from '../lib/prisma'
 type Room = Set<WebSocket>
 
 const TYPE_MAP_PNG = 0x01
+const TYPE_CAMERA_FRAME = 0x02
 
 class WsTelemetry {
   private wss: WebSocketServer | null = null
@@ -65,6 +66,11 @@ class WsTelemetry {
       type: e.action === 'deleted' ? 'annotation_deleted' : `annotation_${e.action}`,
       annotation: e.annotation,
       id: e.id,
+    }))
+    // camera frame en binary avec byte de type 0x02
+    mqttEvents.on('camera_frame', (e) => this.broadcastCamera(e.robotId, e.jpeg))
+    mqttEvents.on('joint_states', (e) => this.broadcastJson(e.robotId, {
+      type: 'joint_states', positions: e.positions, names: e.names,
     }))
 
     console.log('[ws] wsTelemetry registered on /ws/robots/:id/telemetry')
@@ -132,6 +138,16 @@ class WsTelemetry {
       if (ws.readyState !== WebSocket.OPEN) continue
       ws.send(binary, { binary: true })
       ws.send(metaMsg)
+    }
+  }
+
+  private broadcastCamera(robotId: number, jpeg: Buffer): void {
+    const room = this.rooms.get(robotId)
+    if (!room) return
+    const header = Buffer.from([TYPE_CAMERA_FRAME])
+    const binary = Buffer.concat([header, jpeg])
+    for (const ws of room) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(binary, { binary: true })
     }
   }
 

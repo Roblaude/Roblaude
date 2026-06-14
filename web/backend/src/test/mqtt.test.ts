@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
 // Mocks — definis avant l'import du module teste (hoisting vi.mock).
 let messageHandler: ((topic: string, payload: Buffer) => void) | null = null
@@ -34,6 +34,11 @@ const { prismaMock } = vi.hoisted(() => ({
 vi.mock('../lib/prisma', () => ({ default: prismaMock }))
 
 import { robotMqtt } from '../services/mqtt'
+import { missionWatchdog } from '../services/missionWatchdog'
+
+// le watchdog s'arme sur mission/ack & mission/status — on purge ses timers
+// entre chaque test pour ne pas les laisser fuiter.
+afterEach(() => missionWatchdog.clearAll())
 
 // Helper : reconstruit un message MQTT comme s'il venait du broker.
 // Ajoute schemaVersion + timestamp par defaut (spec §4 — obligatoires).

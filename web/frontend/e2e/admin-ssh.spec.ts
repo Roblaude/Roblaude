@@ -34,7 +34,7 @@ test.describe('Page Admin SSH', () => {
 
     await expect(page.getByRole('heading', { name: 'SSH admin' })).toBeVisible()
     await expect(page.getByText('Console (commandes allowlist)')).toBeVisible()
-    await expect(page.getByText('journalctl')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'journalctl' })).toBeVisible()
     await expect(page.getByText('Historique audit SSH')).toBeVisible()
   })
 })

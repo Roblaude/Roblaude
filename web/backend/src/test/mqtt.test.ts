@@ -375,3 +375,49 @@ describe('RobotMqttAdapter — handlers telemetry/battery, status, connection (T
     })
   })
 })
+
+// UC-02 (pick & place) ne definit pas de message dedie : les sous-etats de
+// saisie et l'echec passent par les memes mission/status & mission/result
+// que le transport (spec §5.4). Ces tests verrouillent ce contrat.
+describe('RobotMqttAdapter — UC-02 pick & place', () => {
+  beforeEach(() => {
+    prismaMock.mission.update.mockClear()
+    prismaMock.robot.update.mockClear()
+    prismaMock.$transaction.mockClear()
+    robotMqtt.disconnect(); robotMqtt.resetSeenMessageIds()
+    robotMqtt.connect()
+  })
+
+  it('mission/status propage le sous-etat GRASPING', async () => {
+    deliver('roblaude/3/mission/status', { missionId: 42, state: 'GRASPING', progress: 0.6 })
+    await Promise.resolve()
+    expect(prismaMock.mission.update).toHaveBeenCalledWith({
+      where: { id: 42 },
+      data: { status: 'GRASPING' },
+    })
+  })
+
+  it('mission/status propage le sous-etat DEPOSITING', async () => {
+    deliver('roblaude/3/mission/status', { missionId: 42, state: 'DEPOSITING', progress: 0.9 })
+    await Promise.resolve()
+    expect(prismaMock.mission.update).toHaveBeenCalledWith({
+      where: { id: 42 },
+      data: { status: 'DEPOSITING' },
+    })
+  })
+
+  it('saisie echouee : mission/result failed reason=grasp-failed libere le robot', async () => {
+    deliver('roblaude/3/mission/result', {
+      messageId: 'g-1', missionId: 42, result: 'failed', reason: 'grasp-failed',
+    })
+    await Promise.resolve()
+    expect(prismaMock.mission.update).toHaveBeenCalledWith({
+      where: { id: 42 },
+      data: { status: 'FAILED', failureReason: 'grasp-failed' },
+    })
+    expect(prismaMock.robot.update).toHaveBeenCalledWith({
+      where: { id: 3 },
+      data: { status: 'AVAILABLE' },
+    })
+  })
+})

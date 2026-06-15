@@ -16,10 +16,26 @@ const setupAuth = (role: 'USER' | 'ADMIN' = 'USER') => async (page: import('@pla
 }
 
 const stubApi = async (page: import('@playwright/test').Page): Promise<void> => {
+  // catch-all en premier = priorité la plus basse (Playwright évalue la route
+  // enregistrée en dernier en premier)
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, body: '[]' }))
   await page.route('**/api/health', (route) => route.fulfill({ status: 200, body: '{"status":"ok"}' }))
   await page.route('**/api/mapping/sessions**', (route) => route.fulfill({ status: 200, body: '[]' }))
   await page.route('**/api/admin/ssh/**', (route) => route.fulfill({ status: 200, body: '[]' }))
-  await page.route('**/api/**', (route) => route.fulfill({ status: 200, body: '[]' }))
+  // le dashboard attend {data, total} pour les missions et {data} pour le statut robot,
+  // sinon missions.filter() plante et démonte la page
+  await page.route('**/api/missions**', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], total: 0 }) }),
+  )
+  await page.route('**/api/robots/1/status', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: { id: 1, name: 'Transbot-01', status: 'AVAILABLE', battery: 80, positionX: 0, positionY: 0, heading: 0 },
+      }),
+    }),
+  )
 }
 
 test.describe('Golden path utilisateur', () => {
@@ -46,7 +62,9 @@ test.describe('Golden path utilisateur', () => {
     await expect(page.getByText('Topics')).toBeVisible()
   })
 
-  test('Toggle thème arcade applique class sur body', async ({ page }) => {
+  test('Toggle thème arcade applique class sur body', async ({ page }, testInfo) => {
+    // le toggle arcade vit dans la sidebar desktop (hidden lg:flex) — absent en mobile
+    test.skip(testInfo.project.name === 'mobile', 'Toggle arcade = contrôle sidebar desktop')
     await setupAuth('USER')(page)
     await stubApi(page)
     await page.goto('/')

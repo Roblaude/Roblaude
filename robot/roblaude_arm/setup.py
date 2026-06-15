@@ -26,6 +26,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'object_detector = roblaude_arm.object_detector:main',
         ],
     },
 )

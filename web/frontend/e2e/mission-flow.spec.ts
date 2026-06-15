@@ -114,8 +114,9 @@ test.describe('UC-01 — flux mission transport', () => {
     page.on('dialog', (d) => d.accept())
 
     await page.goto('/')
-    // attend que les missions soient chargées (sinon STOP dit "aucune mission active")
-    await expect(page.getByText('#007')).toBeVisible()
+    // attend que les missions soient chargées (sinon STOP dit "aucune mission active").
+    // #007 apparaît 2x (carte progression + liste récente) -> first()
+    await expect(page.getByText('#007').first()).toBeVisible()
 
     const stopBtn = page.getByRole('button', { name: "Arrêt d'urgence du robot" })
     await expect(stopBtn).toBeEnabled()

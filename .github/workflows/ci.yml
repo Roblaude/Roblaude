@@ -32,6 +32,9 @@ jobs:
       - run: npm run build
       # --passWithNoTests : ne casse pas tant que les tests ne sont pas sur dev
       - run: npm test -- --passWithNoTests
+      # E2E Playwright (golden path, UC-01, STOP, audit WCAG) — desktop + mobile
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
 
   backend:
     name: Backend

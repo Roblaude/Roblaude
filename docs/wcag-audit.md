@@ -1,7 +1,8 @@
 # Audit WCAG AA — RobLaude
 
 > Audit d'accessibilité automatisé via axe-core (tags `wcag2a` + `wcag2aa`),
-> rejoué en CI par `web/frontend/e2e/wcag-audit.spec.ts` (desktop + mobile).
+> rejoué en CI (job frontend) et en local via `npm run test:e2e`
+> (`web/frontend/e2e/wcag-audit.spec.ts`, desktop + mobile).
 
 ## Périmètre
 

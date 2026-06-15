@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
-import { Bot, Send, RotateCcw, AlertTriangle } from 'lucide-react'
+import { Bot, Send, RotateCcw, AlertTriangle, Power, PowerOff, Crosshair } from 'lucide-react'
 import { toast } from 'sonner'
-import { commandArm, type ArmCommand } from '@/lib/armApi'
+import { commandArm, commandArmPreset, type ArmCommand, type ArmPresetName } from '@/lib/armApi'
 
 // Controle direct du bras 6-DOF Yahboom M3 Pro.
 // joint1..5 : axes du bras (-180..180 degres)
@@ -16,23 +16,25 @@ interface Props {
   robotId: number
 }
 
+// HOME officielle Yahboom M3 Pro — pose de repos par defaut.
 const REST_POSE: ArmCommand = {
-  joint1: 0, joint2: 0, joint3: 0, joint4: 0, joint5: 0, joint6: 90,
-  time: 1000,
+  joint1: 90, joint2: 120, joint3: 10, joint4: 20, joint5: 90, joint6: 0,
+  time: 2000,
 }
 
+// Convention Yahboom : tous les joints sont 0..180, 90 = neutre.
 const SLIDERS = [
-  { key: 'joint1', label: 'Base (yaw)', min: -180, max: 180 },
-  { key: 'joint2', label: 'Épaule', min: -90, max: 90 },
-  { key: 'joint3', label: 'Coude', min: -90, max: 90 },
-  { key: 'joint4', label: 'Poignet 1', min: -90, max: 90 },
-  { key: 'joint5', label: 'Poignet 2', min: -180, max: 180 },
-  { key: 'joint6', label: '🤖 Pince', min: 0, max: 180 },
+  { key: 'joint1', label: 'Base (yaw) — 0=gauche, 90=face, 180=droite', min: 0, max: 180 },
+  { key: 'joint2', label: 'Épaule — 0=vertical, 90=45°, 180=horizontal', min: 0, max: 180 },
+  { key: 'joint3', label: 'Coude — 0=tendu, 90=plié, 180=replié', min: 0, max: 180 },
+  { key: 'joint4', label: 'Poignet pitch — 0=bas, 90=neutre, 180=haut', min: 0, max: 180 },
+  { key: 'joint5', label: 'Poignet roulis (rotation)', min: 0, max: 180 },
+  { key: 'joint6', label: '🤖 Gripper — 0=fermé, 180=ouvert', min: 0, max: 180 },
 ] as const
 
 export function ArmController({ robotId }: Props) {
   const [pose, setPose] = useState<ArmCommand>(REST_POSE)
-  const [timeMs, setTimeMs] = useState(500)
+  const [timeMs, setTimeMs] = useState(2000)  // doc Yahboom : 2s = recommande
   const [busy, setBusy] = useState(false)
   const [armed, setArmed] = useState(false)  // safety toggle
   const lastSentRef = useRef<number>(0)
@@ -68,6 +70,28 @@ export function ArmController({ robotId }: Props) {
     setPose(REST_POSE)
     void send(REST_POSE)
   }
+
+  const applyPreset = useCallback(async (preset: ArmPresetName): Promise<void> => {
+    if (!armed) {
+      toast.warning('Active "ARMÉ" pour appliquer un preset au vrai bras')
+      return
+    }
+    setBusy(true)
+    try {
+      const sent = await commandArmPreset(robotId, preset)
+      // sync l'UI avec ce qu'on a envoye (sauf time, le slider ne le gere pas)
+      setPose({
+        joint1: sent.joint1, joint2: sent.joint2, joint3: sent.joint3,
+        joint4: sent.joint4, joint5: sent.joint5, joint6: sent.joint6,
+      })
+      const label = preset === 'startup' ? 'Démarrage' : preset === 'shutdown' ? 'Rangement' : 'Vertical (référence)'
+      toast.success(`Preset "${label}" envoyé`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : `erreur preset ${preset}`)
+    } finally {
+      setBusy(false)
+    }
+  }, [armed, robotId])
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
@@ -131,7 +155,7 @@ export function ArmController({ robotId }: Props) {
         />
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 mb-2">
         <button
           onClick={() => void send(pose)}
           disabled={busy || !armed}
@@ -143,10 +167,63 @@ export function ArmController({ robotId }: Props) {
           onClick={resetPose}
           disabled={busy || !armed}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-gray-200 text-xs rounded font-medium"
-          title="Pose repos : tous joints à 0, pince à 90"
+          title="Pose repos manuelle : tous joints à 0, pince à 90"
         >
           <RotateCcw className="w-3 h-3" /> Repos
         </button>
+      </div>
+
+      {/* Presets officiels Yahboom — convention 0..180, gripper 0=fermé, 180=ouvert */}
+      <div className="border-t border-gray-800 pt-2">
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="text-[10px] text-gray-500 font-mono uppercase tracking-wider">
+            Poses prédéfinies (Yahboom)
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-1 mb-1">
+          <button
+            onClick={() => void applyPreset('startup')}
+            disabled={busy || !armed}
+            className="flex items-center justify-center gap-1 px-2 py-1.5 bg-green-700 hover:bg-green-600 disabled:bg-gray-800 disabled:text-gray-600 text-white text-[10px] rounded font-medium"
+            title="HOME officielle : [90, 120, 10, 20, 90, 0]"
+          >
+            <Power className="w-3 h-3" /> HOME
+          </button>
+          <button
+            onClick={() => void applyPreset('salut')}
+            disabled={busy || !armed}
+            className="flex items-center justify-center gap-1 px-2 py-1.5 bg-blue-700 hover:bg-blue-600 disabled:bg-gray-800 disabled:text-gray-600 text-white text-[10px] rounded font-medium"
+            title="Salut : bras levé [90, 60, 30, 60, 90, 0]"
+          >
+            👋 Salut
+          </button>
+        </div>
+        <div className="grid grid-cols-3 gap-1">
+          <button
+            onClick={() => void applyPreset('vertical')}
+            disabled={busy || !armed}
+            className="flex items-center justify-center gap-1 px-1.5 py-1.5 bg-cyan-700 hover:bg-cyan-600 disabled:bg-gray-800 disabled:text-gray-600 text-white text-[10px] rounded font-medium"
+            title="Bras vertical : joint2=0"
+          >
+            <Crosshair className="w-3 h-3" /> Vert
+          </button>
+          <button
+            onClick={() => void applyPreset('gripperOpen')}
+            disabled={busy || !armed}
+            className="flex items-center justify-center gap-1 px-1.5 py-1.5 bg-purple-700 hover:bg-purple-600 disabled:bg-gray-800 disabled:text-gray-600 text-white text-[10px] rounded font-medium"
+            title="Ouvre la pince max (joint6=180)"
+          >
+            🖐 Pince
+          </button>
+          <button
+            onClick={() => void applyPreset('shutdown')}
+            disabled={busy || !armed}
+            className="flex items-center justify-center gap-1 px-1.5 py-1.5 bg-orange-700 hover:bg-orange-600 disabled:bg-gray-800 disabled:text-gray-600 text-white text-[10px] rounded font-medium"
+            title="Rangement (= HOME, sûre pour shutdown)"
+          >
+            <PowerOff className="w-3 h-3" /> Off
+          </button>
+        </div>
       </div>
     </div>
   )

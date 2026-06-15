@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { asyncHandler } from '../middleware/errorHandler'
 import { listRobots, getRobotStatus } from '../controllers/robotsController'
 import { getMapMetadata, getMapImage } from '../controllers/mapController'
-import { commandArm } from '../controllers/armController'
+import { commandArm, commandArmPreset, listArmPresets } from '../controllers/armController'
 
 const router = Router()
 
@@ -20,5 +20,11 @@ router.get('/:id/map.png', asyncHandler(getMapImage))
 
 // POST /api/robots/:id/arm — commande bras 6-DOF (5 axes + pince joint6)
 router.post('/:id/arm', asyncHandler(commandArm))
+
+// GET /api/robots/arm/presets — liste des presets disponibles (startup, shutdown, vertical)
+router.get('/arm/presets', listArmPresets)
+
+// POST /api/robots/:id/arm/preset/:preset — applique un preset predefini
+router.post('/:id/arm/preset/:preset', asyncHandler(commandArmPreset))
 
 export default router

@@ -133,12 +133,12 @@ def build_joint_states_payload(names, positions) -> dict:
 
 
 # Limites pour cmd/arm (securite avant que le msg ROS atteigne YB_Node).
-# Servos Yahboom M3 Pro = unites entieres int16, range typique -180..180
-# pour les axes, 0..180 pour la pince. Le `time` < 50 ms peut endommager
-# les servos (mouvement trop brusque), > 5000 ms = inutile pour pilotage live.
-ARM_JOINT_MIN = -180
+# Doc officielle Yahboom M3 Pro : tous les joints sont 0..180 (unsigned),
+# 90 = neutre. Voir armController.ts pour le mapping des roles.
+# time < 500 ms = saccade, > 5000 ms = bloque selon constructeur.
+ARM_JOINT_MIN = 0
 ARM_JOINT_MAX = 180
-ARM_TIME_MIN_MS = 50
+ARM_TIME_MIN_MS = 500
 ARM_TIME_MAX_MS = 5000
 
 

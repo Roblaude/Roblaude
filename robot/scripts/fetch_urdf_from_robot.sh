@@ -6,7 +6,9 @@
 #
 # Pre-requis : robot up, container m3pro tourne, /robot_state_publisher actif.
 
-set -euo pipefail
+set -eo pipefail
+# pas de -u car find_robot.sh teste $ROBOT_IP avant set, et certains
+# autres scripts du dossier supposent un environnement laxe.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"

@@ -20,38 +20,39 @@ def _load():
 
 
 def test_validate_arm_command_happy_path():
+    # Convention Yahboom : 0..180, HOME = [90, 120, 10, 20, 90, 0]
     fn = _load()
     joints, t = fn({
-        'joint1': 10, 'joint2': -20, 'joint3': 30,
-        'joint4': -40, 'joint5': 50, 'joint6': 90, 'time': 800,
+        'joint1': 90, 'joint2': 120, 'joint3': 10,
+        'joint4': 20, 'joint5': 90, 'joint6': 0, 'time': 2000,
     })
-    assert joints == [10, -20, 30, -40, 50, 90]
-    assert t == 800
+    assert joints == [90, 120, 10, 20, 90, 0]
+    assert t == 2000
 
 
 def test_validate_arm_command_clamps_angles():
+    # Yahboom : 0..180 unsigned
     fn = _load()
     joints, _ = fn({
-        'joint1': 999, 'joint2': -999, 'joint3': 0,
-        'joint4': 0, 'joint5': 0, 'joint6': 200, 'time': 500,
+        'joint1': 999, 'joint2': -50, 'joint3': 90,
+        'joint4': 90, 'joint5': 90, 'joint6': 250, 'time': 2000,
     })
-    # joint1 clamp a 180, joint2 a -180, joint6 a 180
-    assert joints[0] == 180
-    assert joints[1] == -180
-    assert joints[5] == 180
+    assert joints[0] == 180   # 999 clamp a 180 (max)
+    assert joints[1] == 0     # -50 clamp a 0 (min)
+    assert joints[5] == 180   # 250 clamp a 180
 
 
 def test_validate_arm_command_clamps_time():
     fn = _load()
     _, t_too_fast = fn({
-        'joint1': 0, 'joint2': 0, 'joint3': 0,
-        'joint4': 0, 'joint5': 0, 'joint6': 0, 'time': 10,
+        'joint1': 90, 'joint2': 90, 'joint3': 90,
+        'joint4': 90, 'joint5': 90, 'joint6': 0, 'time': 100,
     })
     _, t_too_slow = fn({
-        'joint1': 0, 'joint2': 0, 'joint3': 0,
-        'joint4': 0, 'joint5': 0, 'joint6': 0, 'time': 99999,
+        'joint1': 90, 'joint2': 90, 'joint3': 90,
+        'joint4': 90, 'joint5': 90, 'joint6': 0, 'time': 99999,
     })
-    assert t_too_fast == 50    # min
+    assert t_too_fast == 500   # min (selon doc Yahboom : < 500ms = saccade)
     assert t_too_slow == 5000  # max
 
 

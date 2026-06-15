@@ -21,7 +21,7 @@ export async function commandArm(robotId: number, cmd: ArmCommand): Promise<void
   }
 }
 
-export type ArmPresetName = 'startup' | 'shutdown' | 'vertical'
+export type ArmPresetName = 'startup' | 'shutdown' | 'salut' | 'vertical' | 'gripperOpen'
 
 export async function commandArmPreset(robotId: number, preset: ArmPresetName): Promise<ArmCommand> {
   const res = await apiFetch(`/robots/${robotId}/arm/preset/${preset}`, {

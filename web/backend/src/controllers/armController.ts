@@ -6,13 +6,20 @@ import { robotMqtt } from '../services/mqtt'
 // Publie sur MQTT roblaude/{id}/cmd/arm, le mqtt_bridge.py cote robot
 // transforme en arm_msgs/ArmJoints et l'envoie a YB_Node -> servos.
 //
-// Limites cote backend (double securite avec celles du robot) :
-//  joint1..6 : int16, on accepte -180..180 (clamp dur robot a -180/180)
-//  time      : 50..5000 ms (mouvement instantane = casser les servos)
+// CONVENTION OFFICIELLE YAHBOOM M3 PRO (servos numeriques STM32) :
+//   joint1 : base yaw       (0 = gauche, 90 = face avant, 180 = droite)
+//   joint2 : epaule pitch   (0 = vertical haut, 90 = 45°, 180 = horizontal)
+//   joint3 : coude          (0 = tendu, 90 = 90° plie, 180 = replie a fond)
+//   joint4 : poignet pitch  (0 = en bas, 90 = neutre, 180 = en haut)
+//   joint5 : poignet roulis (rotation)
+//   joint6 : gripper        (0 = ferme, 180 = ouvert max)
+//   time   : duree en ms    (500..5000, < 500 = saccade, > 5000 = bloque)
+//
+// HOME officielle : [90, 120, 10, 20, 90, 0] time=2000.
 
-const ARM_MIN = -180
+const ARM_MIN = 0
 const ARM_MAX = 180
-const TIME_MIN = 50
+const TIME_MIN = 500
 const TIME_MAX = 5000
 
 const armSchema = z.object({
@@ -38,28 +45,22 @@ const armSchema = z.object({
 //   joint5 : poignet yaw (rotation finale)
 //   joint6 : pince (0 = ouverte, 180 = fermee)
 
-// IMPORTANT : la convention angulaire Yahboom (signe positif/negatif des
-// servos) n'est PAS validee physiquement. Ces valeurs sont une premiere
-// approximation et DOIVENT etre ajustees par l'utilisateur via la fonction
-// de calibration cote frontend (bouton "Enregistrer pose courante").
-//
-// Symptome observe en demo (PR #256) : preset startup envoyait le bras
-// fortement vers le bas alors qu'on voulait juste un leger flechissement,
-// suggerant que joint2 negatif = abaisser, pas lever (inverse de ce que
-// j'avais suppose).
-//
-// Time augmente a 3000ms par defaut = mouvement doux, sans a-coup.
+// Poses officielles Yahboom M3 Pro. Source : doc constructeur fournie
+// par l'utilisateur (cf. commit msg PR #256). Convention 0..180, gripper
+// ferme = 0, ouvert max = 180.
 
 export const ARM_PRESETS = {
-  // Position au demarrage : valeurs prudentes proches du repos
-  // (pas de gros mouvement tant que pas calibre).
-  startup: { joint1: 0, joint2: 0, joint3: 0, joint4: 0, joint5: 0, joint6: 90, time: 3000 },
-  // Position avant extinction : bras replie sur lui-meme, pince fermee.
-  // A valider physiquement par l'utilisateur.
-  shutdown: { joint1: 0, joint2: 60, joint3: -60, joint4: 0, joint5: 0, joint6: 180, time: 3000 },
-  // Reference "verticale" : bras tout droit pointant vers le haut.
-  // Si en pratique ca pointe ailleurs, l'utilisateur doit ajuster.
-  vertical: { joint1: 0, joint2: -90, joint3: 0, joint4: 0, joint5: 0, joint6: 90, time: 3000 },
+  // HOME officielle Yahboom — pose recommandee au repos / debut+fin de session.
+  // Servos chauffent moins en position depliee, c'est la safe spot du M3 Pro.
+  startup: { joint1: 90, joint2: 120, joint3: 10, joint4: 20, joint5: 90, joint6: 0, time: 2000 },
+  // Shutdown = HOME aussi (idem pose de repos)
+  shutdown: { joint1: 90, joint2: 120, joint3: 10, joint4: 20, joint5: 90, joint6: 0, time: 2000 },
+  // Salut : bras leve, gripper ferme (gesture demo).
+  salut: { joint1: 90, joint2: 60, joint3: 30, joint4: 60, joint5: 90, joint6: 0, time: 2000 },
+  // Vertical pur : joint2=0 = bras pointant vers le haut.
+  vertical: { joint1: 90, joint2: 0, joint3: 0, joint4: 90, joint5: 90, joint6: 0, time: 2000 },
+  // Gripper teste : ouvre la pince au max.
+  gripperOpen: { joint1: 90, joint2: 120, joint3: 10, joint4: 20, joint5: 90, joint6: 180, time: 1500 },
 } as const
 
 type PresetName = keyof typeof ARM_PRESETS

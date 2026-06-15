@@ -111,7 +111,7 @@ Robot : **Yahboom ROSMASTER M3 PRO** (version Jetson Nano). Caractéristiques :
 - **Calculateur** : NVIDIA Jetson Nano B01 (4 Go RAM, ARM64, JetPack 4.6 / Ubuntu 18.04 d'origine — cible ROS 2 Humble via conteneurs Docker `dustynv/ros:humble`)
 - **Châssis** : 4 roues mecanum (déplacement omnidirectionnel)
 - **LiDAR** : YDLidar 2D (portée ~8 m, 360°)
-- **Caméra** : Astra Pro RGB-D (profondeur) ou équivalent USB HD
+- **Caméra** : Orbbec DaBai DCW2 RGB-D (couleur via UVC, profondeur via OrbbecSDK)
 - **Bras** : 6 DOF avec gripper (modèle PRO MAX)
 - **Contrôleur bas niveau** : carte STM32 pilotée via UART par la lib Python officielle Yahboom `Rosmaster_Lib`
 - **Commande** : manette 2.4 GHz avec dongle USB (fournie)

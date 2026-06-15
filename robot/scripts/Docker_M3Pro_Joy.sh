@@ -45,9 +45,9 @@ if docker ps -a --format '{{.Names}}' | grep -qx m3pro; then
     docker rm m3pro >/dev/null 2>&1 || true
 fi
 
-# Astra Pro : la couleur (RGB) passe par l'UVC /dev/video0, la depth par
-# /dev/bus/usb. Sans /dev/video0 dans le container, le stream couleur plante
-# ("can not set this stream"). On le passe s'il est present.
+# DaBai DCW2 : la couleur (RGB) passe par l'UVC /dev/video0 (node pub_rgb_image),
+# la depth par /dev/bus/usb (OrbbecSDK). Sans /dev/video0 dans le container, pas
+# de flux couleur. On le passe s'il est present.
 VIDEO_DEV=""
 [ -e /dev/video0 ] && VIDEO_DEV="--device=/dev/video0"
 

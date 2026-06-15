@@ -2,7 +2,7 @@
 """object_detector — detection d'objet par couleur (HSV + depth Orbbec).
 
 Porte de la stack vision du prof, recale sur notre materiel et nos canaux :
-  - camera Orbbec Astra Pro (pas RealSense) : topics et frame optique reels,
+  - camera Orbbec DaBai DCW2 (pas RealSense) : topics et frame optique reels,
   - intrinseques lues sur /camera/color/camera_info (plus de fx=615 en dur),
   - couleur cible = hex (def via parametre, surchargeable a chaud par mission
     sur /roblaude/target_color) -> plage HSV derivee (cf. color.py),

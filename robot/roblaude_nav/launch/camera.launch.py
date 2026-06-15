@@ -1,18 +1,21 @@
 """
-camera.launch.py — Demarre la camera RGB-D Astra Pro du ROSMASTER M3 PRO
+camera.launch.py — Demarre la camera RGB-D du ROSMASTER M3 PRO
 
-La camera est une Orbbec Astra Pro (profondeur + RGB).
-Yahboom fournit le package `orbbec_camera` avec un launch file par modele.
+La camera reelle est une Orbbec DaBai DCW2 (verifie via dmesg : "Orbbec DaBai
+DCW2 RGB Camera", 2bc5:0561 RGB + 2bc5:06a0 depth). On lance donc le launch
+Orbbec du BON modele (dabai_dcw2), pas astra_pro2 — sinon les profils couleur ne
+matchent pas et le stream couleur plante ("can not set this stream").
 
-Ce launch inclut simplement le bon launch file Orbbec + les tf2 minimales.
+depth_registration:=true aligne la depth sur le repere couleur, necessaire pour
+que object_detector mappe le pixel couleur vers la profondeur.
 
 Usage (sur le robot, dans le conteneur ROS 2) :
-    ros2 launch /path/to/camera.launch.py
+    ros2 launch roblaude_nav camera.launch.py
 
 Topics publies (principaux) :
     /camera/color/image_raw       : image RGB
     /camera/depth/image_raw       : carte de profondeur (16UC1, mm)
-    /camera/depth/color/points    : nuage de points (sensor_msgs/PointCloud2)
+    /camera/color/camera_info     : intrinseques reelles (lues par le detecteur)
 """
 
 from launch import LaunchDescription
@@ -33,14 +36,15 @@ def generate_launch_description():
             arguments=['0.10', '0.0', '0.08', '0', '0', '0', 'base_link', 'camera_link'],
         ),
 
-        # Driver Orbbec Astra Pro (launch Yahboom officiel)
+        # Driver Orbbec — modele DaBai DCW2 (launch officiel orbbec_camera)
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([
                 PathJoinSubstitution([
                     FindPackageShare('orbbec_camera'),
                     'launch',
-                    'astra_pro2.launch.py'
+                    'dabai_dcw2.launch.py'
                 ])
-            ])
+            ]),
+            launch_arguments={'depth_registration': 'true'}.items(),
         ),
     ])

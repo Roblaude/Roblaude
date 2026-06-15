@@ -1,7 +1,10 @@
 """Tests des helpers de detection 3D — numpy synthetique, pas de camera."""
+import math
+
 import numpy as np
 
-from roblaude_arm.detection import backproject, sample_depth_median
+from roblaude_arm.detection import (backproject, sample_depth_median,
+                                    select_best_detection, transform_point)
 
 
 def test_depth_median_uint16_mm():
@@ -48,3 +51,33 @@ def test_backproject_decalage():
 
 def test_backproject_sans_depth():
     assert backproject(380, 240, 0.0, 600, 600, 320, 240) == (0.0, 0.0, 0.0)
+
+
+def test_select_best_prend_le_plus_proche():
+    pts = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.9), (0.1, 0.0, 0.4)]
+    best = select_best_detection(pts)
+    assert best == (0.1, 0.0, 0.4)  # le plus proche, z valide
+
+
+def test_select_best_ignore_z_nul():
+    assert select_best_detection([(0.5, 0.5, 0.0)]) is None
+
+
+def test_select_best_vide():
+    assert select_best_detection([]) is None
+
+
+def test_transform_identite_translation():
+    # quaternion identite (0,0,0,1) -> juste la translation
+    x, y, z = transform_point(1.0, 2.0, 3.0, 0.1, 0.2, 0.3, 0, 0, 0, 1)
+    assert (round(x, 6), round(y, 6), round(z, 6)) == (1.1, 2.2, 3.3)
+
+
+def test_transform_rotation_90_z():
+    # rotation 90 deg autour de Z : (1,0,0) -> (0,1,0)
+    s = math.sin(math.pi / 4)
+    c = math.cos(math.pi / 4)
+    x, y, z = transform_point(1.0, 0.0, 0.0, 0, 0, 0, 0, 0, s, c)
+    assert abs(x - 0.0) < 1e-9
+    assert abs(y - 1.0) < 1e-9
+    assert abs(z - 0.0) < 1e-9

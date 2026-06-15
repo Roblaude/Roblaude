@@ -44,3 +44,39 @@ def backproject(cx: float, cy: float, z: float,
     x = (cx - cx0) / fx * z
     y = (cy - cy0) / fy * z
     return x, y, z
+
+
+def select_best_detection(points):
+    """Parmi des points (x, y, z), garde le plus proche avec profondeur valide.
+
+    `points` : iterable de (x, y, z) dans le repere optique camera. Ignore les
+    z <= 0 (pas de depth). Renvoie le (x, y, z) le plus proche, ou None.
+    """
+    best = None
+    best_d = float('inf')
+    for (x, y, z) in points:
+        if z <= 0:
+            continue
+        d = x * x + y * y + z * z
+        if d < best_d:
+            best_d = d
+            best = (x, y, z)
+    return best
+
+
+def transform_point(px, py, pz, tx, ty, tz, qx, qy, qz, qw):
+    """Applique une transfo TF (rotation quaternion + translation) a un point.
+
+    Sert a passer une detection du repere optique camera vers base_link, a
+    partir du lookup_transform TF. Formule de rotation par quaternion standard.
+    """
+    rx = px + 2.0 * (-(qy * qy + qz * qz) * px
+                     + (qx * qy - qw * qz) * py
+                     + (qx * qz + qw * qy) * pz)
+    ry = py + 2.0 * ((qx * qy + qw * qz) * px
+                     - (qx * qx + qz * qz) * py
+                     + (qy * qz - qw * qx) * pz)
+    rz = pz + 2.0 * ((qx * qz - qw * qy) * px
+                     + (qy * qz + qw * qx) * py
+                     - (qx * qx + qy * qy) * pz)
+    return rx + tx, ry + ty, rz + tz

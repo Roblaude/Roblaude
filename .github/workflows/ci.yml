@@ -68,7 +68,7 @@ jobs:
 
       - run: npm ci
       - run: npm run build
-      # cree les tables a partir du schema Prisma (test d'integration mapping-db)
-      - run: npx prisma db push --skip-generate
+      # applique les migrations comme en prod (Render) — detecte un drift schema/migrations
+      - run: npx prisma migrate deploy
       - run: npm test -- --passWithNoTests
 

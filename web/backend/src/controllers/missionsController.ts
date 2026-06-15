@@ -91,7 +91,10 @@ const createMissionSchema = z.object({
   toPointId: z.number().int().positive(),
   robotId: z.number().int().positive().optional(),
   objectId: z.number().int().positive().optional(),
-})
+}).refine(
+  (d) => d.type !== MissionType.PICK_AND_PLACE || d.objectId !== undefined,
+  { message: 'objectId est requis pour une mission pick & place', path: ['objectId'] },
+)
 
 export async function createMission(req: Request, res: Response) {
   // authGuard est en amont de cette route, mais on garde le check explicite
@@ -130,6 +133,15 @@ export async function createMission(req: Request, res: Response) {
     return
   }
 
+  // pick & place : l'objet doit exister (la cle etrangere echouerait sinon)
+  if (objectId) {
+    const object = await prisma.graspObject.findUnique({ where: { id: objectId } })
+    if (!object) {
+      res.status(400).json({ error: 'Objet introuvable', field: 'objectId' })
+      return
+    }
+  }
+
   // vérifier que le robot est dispo si précisé
   if (robotId) {
     const robot = await prisma.robot.findUnique({ where: { id: robotId } })
@@ -157,6 +169,7 @@ export async function createMission(req: Request, res: Response) {
       toPoint: true,
       robot: { select: { id: true, name: true, status: true } },
       user: { select: { id: true, name: true, email: true } },
+      object: true,
     },
   })
 

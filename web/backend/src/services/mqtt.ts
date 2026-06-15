@@ -4,6 +4,7 @@ import { MissionStatus, RobotStatus } from '@prisma/client'
 import { z } from 'zod'
 import prisma from '../lib/prisma'
 import { mqttEvents, type MqttEvents } from './mqttEvents'
+import { missionWatchdog } from './missionWatchdog'
 
 // Adaptateur MQTT du backend — singleton.
 // Topics et formats : voir docs/mqtt-spec.md
@@ -251,7 +252,7 @@ class RobotMqttAdapter {
         break
       case 'mission':
         if (sub === 'ack') void this.handleMissionAck(robotId, data)
-        else if (sub === 'status') void this.handleMissionStatus(data)
+        else if (sub === 'status') void this.handleMissionStatus(robotId, data)
         else if (sub === 'result') void this.handleMissionResult(robotId, data)
         break
       case 'mapping':
@@ -387,11 +388,13 @@ class RobotMqttAdapter {
           where: { id: missionId },
           data: { robotId },
         })
+        missionWatchdog.arm(missionId, robotId)
       } else {
         await prisma.mission.update({
           where: { id: missionId },
           data: { status: MissionStatus.FAILED, failureReason: reason ?? 'rejected' },
         })
+        missionWatchdog.clear(missionId)
       }
     }).catch((err) => {
       // L'echec NE marque PAS le messageId comme vu (cf. withIdempotence)
@@ -402,7 +405,7 @@ class RobotMqttAdapter {
 
   // mission/status — propage le sous-etat courant. Pas de messageId
   // (etat retained, on ecrase, pas besoin de dedoublonner).
-  private async handleMissionStatus(data: Record<string, unknown>) {
+  private async handleMissionStatus(robotId: number, data: Record<string, unknown>) {
     const parsed = missionStatusSchema.safeParse(data)
     if (!parsed.success) {
       console.warn('[mqtt] mission/status rejete :', parsed.error.issues)
@@ -419,6 +422,8 @@ class RobotMqttAdapter {
         status: state,
         progress,
       })
+      // progression recue : on repousse le timeout (#99)
+      missionWatchdog.arm(missionId, robotId)
     } catch (err) {
       console.error('[mqtt] update mission/status :',
         err instanceof Error ? err.message : err)
@@ -455,6 +460,7 @@ class RobotMqttAdapter {
         robotId,
         status: RobotStatus.AVAILABLE,
       })
+      missionWatchdog.clear(missionId)
     }).catch((err) => {
       // L'echec NE marque PAS le messageId comme vu (cf. withIdempotence)
       console.error('[mqtt] update mission/result :',

@@ -6,6 +6,7 @@ import { authGuard } from './middleware/auth'
 import authRouter from './routes/auth'
 import missionsRouter from './routes/missions'
 import pointsRouter from './routes/points'
+import objectsRouter from './routes/objects'
 import robotsRouter from './routes/robots'
 import mappingRouter from './routes/mapping'
 import annotationsRouter from './routes/annotations'
@@ -39,6 +40,7 @@ app.use('/api/auth', authRouter)
 // Routes protegees par authGuard
 app.use('/api/missions', authGuard, missionsRouter)
 app.use('/api/points', authGuard, pointsRouter)
+app.use('/api/objects', authGuard, objectsRouter)
 app.use('/api/robots', authGuard, robotsRouter)
 app.use('/api/mapping', authGuard, mappingRouter)
 app.use('/api/annotations', authGuard, annotationsRouter)

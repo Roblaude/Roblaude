@@ -19,12 +19,15 @@ uml/            — Diagrammes PlantUML
 
 - **Frontend** — React + Vite + TypeScript (PWA), Zustand, Tailwind, Playwright.
 - **Backend** — Node + Express + TypeScript, Prisma + MySQL, WebSocket, client MQTT.
-- **Robot** — ROS 2 Humble (Nav2, SLAM, MoveIt2, OpenCV).
+- **Robot** — ROS 2 Humble : navigation (Nav2 + SLAM), contrôle du bras ; vision OpenCV et MoveIt2 prévus (Sprint 6).
 - **Communication** — REST + WebSocket (front ↔ back), MQTT/Mosquitto (back ↔ robot).
 
 ## Démarrage rapide
 
 Prérequis : Node 22, Docker, npm.
+
+Le broker MQTT exige une authentification (`allow_anonymous false`) : créer
+d'abord `infra/mosquitto/passwd` — voir [infra/mosquitto/README.md](infra/mosquitto/README.md).
 
 ```bash
 # 1. Infra (MySQL + broker Mosquitto)
@@ -32,9 +35,10 @@ docker compose up -d
 
 # 2. Backend
 cd web/backend
-cp .env.example .env            # renseigner JWT_SECRET (openssl rand -base64 32)
+cp .env.example .env            # JWT_SECRET (openssl rand -base64 32) + MQTT_USERNAME / MQTT_PASSWORD
 npm install
 npx prisma migrate deploy       # crée le schéma
+npx ts-node prisma/seed.ts      # données de démo + admin (admin@roblaude.fr / changeme)
 npm run dev                     # http://localhost:3001
 
 # 3. Frontend (autre terminal)

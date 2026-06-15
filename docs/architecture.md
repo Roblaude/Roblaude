@@ -21,7 +21,7 @@ flowchart LR
 
   subgraph Robot["Robot — Jetson Nano / ROS 2"]
     BRIDGE["mqtt_bridge<br/>(ROS2 ↔ MQTT)"]
-    ROS["Nav2 · SLAM · MoveIt2 · vision"]
+    ROS["Nav2 · SLAM · contrôle bras<br/>(MoveIt2 / vision : prévu)"]
   end
 
   PWA -- "REST (JSON)" --> API
@@ -30,6 +30,7 @@ flowchart LR
   API -- "MQTT pub/sub" --> BROKER
   BRIDGE -- "MQTT pub/sub" --> BROKER
   BRIDGE <--> ROS
+  API -. "SSH admin (ops/debug)" .-> Robot
 ```
 
 ## Composants
@@ -44,10 +45,14 @@ flowchart LR
   frontend par WebSocket.
 - **MySQL** — utilisateurs, robots, points, objets, missions, sessions de mapping,
   snapshots, annotations, audit SSH.
-- **Mosquitto** — unique canal entre le serveur et le robot. Robot et backend se
-  connectent **en sortie** ; aucun port entrant côté robot.
-- **Robot (ROS 2 Humble)** — navigation (Nav2 + SLAM), bras (MoveIt2), vision
-  (OpenCV). Un nœud `mqtt_bridge` traduit ROS 2 ↔ MQTT.
+- **Mosquitto** — canal **applicatif** principal entre le serveur et le robot
+  (commandes, télémétrie, missions). Robot et backend se connectent **en sortie** ;
+  aucun port entrant côté robot. En parallèle, un canal **SSH admin** (ops/debug,
+  via `/api/admin/ssh` + `/ws/robots/:id/ssh`, réservé admin) permet d'inspecter
+  le robot — hors flux applicatif.
+- **Robot (ROS 2 Humble)** — navigation (Nav2 + SLAM) et contrôle du bras
+  opérationnels ; MoveIt2 et la vision (OpenCV) prévus (Sprint 6, cf.
+  `robot/README.md`). Un nœud `mqtt_bridge` traduit ROS 2 ↔ MQTT.
 
 ## Flux
 

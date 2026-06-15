@@ -63,9 +63,9 @@
 | POST | `/start` | Démarrer une session SLAM |
 | POST | `/stop` | Arrêter la session |
 | POST | `/save` | Sauvegarder un snapshot de carte |
-| GET | `/sessions` / `/sessions/:id` | Sessions de mapping |
+| GET | `/sessions?robotId=` / `/sessions/:id` | Sessions de mapping (`robotId` obligatoire sur la liste) |
 | GET | `/snapshots/:id/download.:ext` | Télécharger un snapshot (pgm/yaml/png) |
-| POST | `/snapshots/:id/set-current` | Définir la carte courante |
+| POST | `/snapshots/:id/set-current` | Définir la carte courante **(admin)** |
 
 ## Annotations — `/api/annotations`
 

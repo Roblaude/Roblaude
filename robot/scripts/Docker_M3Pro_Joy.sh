@@ -45,6 +45,12 @@ if docker ps -a --format '{{.Names}}' | grep -qx m3pro; then
     docker rm m3pro >/dev/null 2>&1 || true
 fi
 
+# Astra Pro : la couleur (RGB) passe par l'UVC /dev/video0, la depth par
+# /dev/bus/usb. Sans /dev/video0 dans le container, le stream couleur plante
+# ("can not set this stream"). On le passe s'il est present.
+VIDEO_DEV=""
+[ -e /dev/video0 ] && VIDEO_DEV="--device=/dev/video0"
+
 docker run -d \
   --name m3pro \
   --restart=unless-stopped \
@@ -65,6 +71,7 @@ docker run -d \
   -v /etc/roblaude:/etc/roblaude:ro \
   --device=/dev/bus/usb \
   --device=/dev/input \
+  $VIDEO_DEV \
   --security-opt apparmor:unconfined \
   192.168.2.51:5000/rosmaster-m3pro-nano:1.1.0 \
   /bin/bash -c 'if [ -x /root/roblaude_ws/scripts/container_autostart.sh ]; then

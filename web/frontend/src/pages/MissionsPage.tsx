@@ -61,6 +61,7 @@ export function MissionsPage() {
       {/* Filtres */}
       <div className="flex flex-wrap gap-3 mb-5">
         <select
+          aria-label="Filtrer par statut"
           value={filters.status ?? ''}
           onChange={(e) => setFilters({ status: (e.target.value as MissionStatus) || undefined, page: 1 })}
           className="bg-gray-800 border border-gray-700 text-gray-200 text-sm rounded-lg px-3 py-2
@@ -72,6 +73,7 @@ export function MissionsPage() {
         </select>
 
         <select
+          aria-label="Filtrer par type"
           value={filters.type ?? ''}
           onChange={(e) => setFilters({ type: (e.target.value as MissionType) || undefined, page: 1 })}
           className="bg-gray-800 border border-gray-700 text-gray-200 text-sm rounded-lg px-3 py-2
@@ -101,7 +103,7 @@ export function MissionsPage() {
 
       {/* Tableau */}
       <div className="rounded-xl border border-gray-800 overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Tableau des missions">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-900 border-b border-gray-800">

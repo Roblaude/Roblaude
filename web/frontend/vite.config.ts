@@ -15,6 +15,26 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     exclude: ['**/e2e/**', '**/node_modules/**', '**/tests/**'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'text-summary'],
+      // scope unitaire : logique (stores, libs) + composants présentables.
+      // Les pages, vues 3D/canvas et composants WS sont couverts par les E2E.
+      include: [
+        'src/stores/**',
+        'src/lib/**',
+        'src/components/StatusBadge.tsx',
+        'src/components/MissionProgress.tsx',
+        'src/components/DegradedModeBanner.tsx',
+        'src/components/BottomNav.tsx',
+      ],
+      exclude: [
+        'src/lib/sounds.ts', // WebAudio
+        'src/lib/notifications.ts', // Notification API navigateur
+        'src/stores/mappingStore.ts', // flux mapping — couvert par E2E
+      ],
+      thresholds: { lines: 60 },
+    },
   },
   server: {
     proxy: {

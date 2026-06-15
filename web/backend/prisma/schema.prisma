@@ -52,6 +52,9 @@ model GraspObject {
   id        Int      @id @default(autoincrement())
   name      String
   imageUrl  String?
+  // couleur cible pour la detection vision du robot (UC-02). Hex, le robot en
+  // derive la plage HSV. Defaut rouge, comme la couleur par defaut du detecteur.
+  color     String   @default("#ff0000")
   available Boolean  @default(true)
   locationId Int
   location  Point    @relation(fields: [locationId], references: [id])

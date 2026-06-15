@@ -184,6 +184,8 @@ export async function createMission(req: Request, res: Response) {
       fromPoint: { x: fromPoint.x, y: fromPoint.y, theta: fromPoint.theta, slug: fromPoint.slug },
       toPoint: { x: toPoint.x, y: toPoint.y, theta: toPoint.theta, slug: toPoint.slug },
       objectId: mission.objectId,
+      // couleur de l'objet -> le robot impose la cible HSV au detecteur (UC-02)
+      targetColor: mission.object?.color ?? null,
     })
   }
 

@@ -145,12 +145,15 @@ manquant) est **loggé puis ignoré** — jamais de crash.
   "type": "TRANSPORT",
   "fromPoint": { "slug": "accueil",     "x": 1.20, "y": 3.40, "theta": 0.00 },
   "toPoint":   { "slug": "bureau-201",  "x": 8.05, "y": 2.10, "theta": 1.57 },
-  "objectId": null
+  "objectId": null,
+  "targetColor": null
 }
 ```
 
 - `type` : `TRANSPORT` (UC-01) ou `PICK_AND_PLACE` (UC-02).
 - `objectId` : `null` pour un transport, l'id de l'objet pour un pick & place.
+- `targetColor` : couleur hex de l'objet (`#rrggbb`) pour un pick & place, `null`
+  pour un transport. Le robot en dérive la plage HSV de détection (UC-02).
 
 **`cmd/cancel`**, **`cmd/resume`**, **`cmd/loading-confirmed`** — même forme
 

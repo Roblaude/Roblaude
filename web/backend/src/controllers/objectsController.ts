@@ -43,6 +43,8 @@ export async function getObject(req: Request, res: Response) {
 const objectSchema = z.object({
   name: z.string().min(1, 'Le nom est requis'),
   imageUrl: z.string().optional(),
+  // hex pour la detection vision (le robot en derive la plage HSV)
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Couleur hex attendue (#rrggbb)').optional(),
   available: z.boolean().default(true),
   locationId: z.number().int().positive("L'emplacement est requis"),
 })

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useMissionStore, type MissionType } from '../stores/missionStore'
+import { listObjects, type GraspObject } from '@/lib/objectsApi'
 import { apiFetch } from '@/lib/api'
 
 // Le backend expose ces champs sur /api/points et /api/robots.
@@ -25,6 +26,8 @@ export function NewMissionPage() {
   const [fromPointId, setFromPointId] = useState<number | ''>('')
   const [toPointId, setToPointId] = useState<number | ''>('')
   const [robotId, setRobotId] = useState<number | ''>('')
+  const [objects, setObjects] = useState<GraspObject[]>([])
+  const [objectId, setObjectId] = useState<number | ''>('')
 
   const [loadingData, setLoadingData] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -35,9 +38,10 @@ export function NewMissionPage() {
     let cancelled = false
     ;(async () => {
       try {
-        const [pRes, rRes] = await Promise.all([
+        const [pRes, rRes, objs] = await Promise.all([
           apiFetch('/points'),
           apiFetch('/robots'),
+          listObjects(),
         ])
         if (cancelled) return
         if (pRes.ok) {
@@ -48,6 +52,7 @@ export function NewMissionPage() {
           const j = (await rRes.json()) as { data: RobotLite[] }
           setRobots(j.data)
         }
+        setObjects(objs)
       } catch {
         if (!cancelled) setError('Impossible de charger les points et robots')
       } finally {
@@ -71,6 +76,10 @@ export function NewMissionPage() {
       setError('Le depart et l arrivee doivent etre differents')
       return
     }
+    if (type === 'PICK_AND_PLACE' && objectId === '') {
+      setError('Choisis un objet a recuperer')
+      return
+    }
 
     setSubmitting(true)
     try {
@@ -79,6 +88,7 @@ export function NewMissionPage() {
         fromPointId: Number(fromPointId),
         toPointId: Number(toPointId),
         ...(robotId !== '' ? { robotId: Number(robotId) } : {}),
+        ...(type === 'PICK_AND_PLACE' && objectId !== '' ? { objectId: Number(objectId) } : {}),
       })
       navigate(`/missions/${mission.id}`)
     } catch (err) {
@@ -120,13 +130,40 @@ export function NewMissionPage() {
           <select
             id="type"
             value={type}
-            onChange={(e) => setType(e.target.value as MissionType)}
+            onChange={(e) => {
+              const t = e.target.value as MissionType
+              setType(t)
+              if (t !== 'PICK_AND_PLACE') setObjectId('')
+            }}
             className={selectClass}
           >
             <option value="TRANSPORT">Transport de document</option>
             <option value="PICK_AND_PLACE">Recuperation d objet</option>
           </select>
         </div>
+
+        {/* Objet a recuperer — uniquement pour un pick & place (UC-02) */}
+        {type === 'PICK_AND_PLACE' && (
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="object" className="text-sm font-medium text-gray-300">
+              Objet a recuperer
+            </label>
+            <select
+              id="object"
+              value={objectId}
+              onChange={(e) => setObjectId(e.target.value ? Number(e.target.value) : '')}
+              disabled={loadingData}
+              className={selectClass}
+            >
+              <option value="">— Choisir un objet —</option>
+              {objects.map((o) => (
+                <option key={o.id} value={o.id} disabled={!o.available}>
+                  {o.name}{o.available ? '' : ' (indisponible)'}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Point de depart */}
         <div className="flex flex-col gap-1.5">

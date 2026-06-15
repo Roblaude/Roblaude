@@ -4,6 +4,7 @@ import { useRobotStore, type RobotStatus } from '../stores/robotStore'
 import { useMissionStore } from '../stores/missionStore'
 import { useAuthStore } from '../stores/authStore'
 import { StatusBadge } from '../components/StatusBadge'
+import { MissionProgress } from '../components/MissionProgress'
 import { RobotMap } from '../components/RobotMap'
 import {
   ArrowRight,
@@ -280,6 +281,28 @@ export function DashboardPage() {
           </Link>
         </section>
       </div>
+
+      {/* ============ Progression mission active (UC-01/UC-02) ============ */}
+      {activeMissions.length > 0 && (
+        <section className="relative rounded-sm border border-border bg-card/40 p-5 mb-4 overflow-hidden">
+          <CornerBrackets />
+          <div className="flex items-center justify-between mb-4">
+            <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
+              · Progression mission
+            </p>
+            <Link
+              to={`/missions/${activeMissions[0].id}`}
+              className="font-mono text-[10px] uppercase tracking-widest text-primary hover:text-primary/80"
+            >
+              #{String(activeMissions[0].id).padStart(3, '0')} ·{' '}
+              {activeMissions[0].type === 'TRANSPORT' ? 'Transport' : 'Pick & Place'}
+            </Link>
+          </div>
+          <div className="overflow-x-auto pb-1">
+            <MissionProgress status={activeMissions[0].status} type={activeMissions[0].type} />
+          </div>
+        </section>
+      )}
 
       {/* ============ System status grid ============ */}
       <section

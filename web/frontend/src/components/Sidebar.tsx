@@ -13,6 +13,7 @@ import {
   Map,
   Terminal,
   Sparkles,
+  Package,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -21,7 +22,8 @@ const NAV_ITEMS = [
   { to: '/missions/new', label: 'Nouvelle mission', code: '03', Icon: Plus, adminOnly: false },
   { to: '/mapping', label: 'Mode mapping', code: '04', Icon: Map, adminOnly: false },
   { to: '/admin', label: 'Admin', code: '05', Icon: Settings2, adminOnly: true },
-  { to: '/admin/ssh', label: 'SSH admin', code: '06', Icon: Terminal, adminOnly: true },
+  { to: '/admin/objects', label: 'Objets', code: '06', Icon: Package, adminOnly: true },
+  { to: '/admin/ssh', label: 'SSH admin', code: '07', Icon: Terminal, adminOnly: true },
   { to: '/profile', label: 'Profil', code: '07', Icon: User, adminOnly: false },
 ]
 

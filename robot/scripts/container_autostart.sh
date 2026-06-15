@@ -111,6 +111,17 @@ else
     echo "[autostart] roblaude_nav.mission_executor pas encore build, skip"
 fi
 
+# --- 5) Camera RGB-D Orbbec DaBai DCW2 (couleur via pub_rgb_image + depth) ---
+# Couleur sur /camera/color/image_raw, depth sur /camera/depth/image_raw. Le
+# bridge MQTT republie la couleur (telemetry/camera) -> le frontend l'affiche.
+# Au boot, l'USB est enumere a frais : le device repond (contrairement a un
+# (re)lancement a chaud sur device deja occupe).
+if [ -f "$ROBLAUDE_WS/install/roblaude_nav/share/roblaude_nav/launch/camera.launch.py" ]; then
+    spawn_once camera ros2 launch roblaude_nav camera.launch.py
+else
+    echo "[autostart] camera.launch.py pas encore build, camera non lancee"
+fi
+
 echo "[autostart] tout lance. Logs : /tmp/roslogs/*.log"
 echo "[autostart] verif : ros2 topic list | head"
 

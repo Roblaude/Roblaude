@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useMissionStore, type Mission } from '../stores/missionStore'
 import { StatusBadge } from '../components/StatusBadge'
+import { MissionProgress } from '../components/MissionProgress'
 import { apiFetch } from '@/lib/api'
 
 // Une mission ne peut plus etre annulee une fois terminee.
@@ -84,6 +85,12 @@ export function MissionDetailPage() {
           className="mb-4 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm"
         >
           {error}
+        </div>
+      )}
+
+      {mission && (
+        <div className="mb-5 overflow-x-auto">
+          <MissionProgress status={mission.status} type={mission.type} />
         </div>
       )}
 

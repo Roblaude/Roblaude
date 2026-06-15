@@ -44,7 +44,7 @@ interface MissionStore {
   setFilters: (filters: Partial<MissionFilters>) => void
   // override : filtres ponctuels non persistes (ex: dashboard = stats globales)
   fetchMissions: (override?: Partial<MissionFilters>) => Promise<void>
-  createMission: (data: { type: MissionType; fromPointId: number; toPointId: number; robotId?: number }) => Promise<Mission>
+  createMission: (data: { type: MissionType; fromPointId: number; toPointId: number; robotId?: number; objectId?: number }) => Promise<Mission>
   cancelMission: (id: number) => Promise<void>
   setCurrentMission: (mission: Mission | null) => void
 }

@@ -6,6 +6,7 @@ import { MissionsPage } from './pages/MissionsPage'
 import { MissionDetailPage } from './pages/MissionDetailPage'
 import { NewMissionPage } from './pages/NewMissionPage'
 import { AdminPage } from './pages/AdminPage'
+import { AdminObjectsPage } from './pages/AdminObjectsPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { MappingPage } from './pages/MappingPage'
 import { AdminSshPage } from './pages/AdminSshPage'
@@ -40,6 +41,10 @@ export default function App() {
             <Route
               path="/admin"
               element={role === 'ADMIN' ? <AdminPage /> : <Navigate to="/" replace />}
+            />
+            <Route
+              path="/admin/objects"
+              element={role === 'ADMIN' ? <AdminObjectsPage /> : <Navigate to="/" replace />}
             />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/mapping" element={<MappingPage />} />

@@ -23,7 +23,7 @@ describe('POST /api/robots/:id/arm', () => {
     const res = await request(app)
       .post('/api/robots/1/arm')
       .set('Authorization', `Bearer ${token}`)
-      .send({ joint1: 10, joint2: -20, joint3: 30, joint4: -40, joint5: 50, joint6: 90, time: 800 })
+      .send({ joint1: 90, joint2: 120, joint3: 10, joint4: 20, joint5: 90, joint6: 0, time: 800 })
     expect(res.status).toBe(202)
     expect(res.body.ok).toBe(true)
   })

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { StatusBadge } from '../components/StatusBadge'
 import { MissionProgress } from '../components/MissionProgress'
@@ -55,9 +55,11 @@ describe('DegradedModeBanner', () => {
     vi.useRealTimers()
   })
 
-  it('ne montre rien quand le backend répond', () => {
-    global.fetch = vi.fn().mockResolvedValue({ ok: true })
+  it('ne montre rien quand le backend répond', async () => {
+    const f = vi.fn().mockResolvedValue({ ok: true })
+    global.fetch = f
     render(<DegradedModeBanner />)
+    await waitFor(() => expect(f).toHaveBeenCalled()) // attend le health check
     expect(screen.queryByText(/Backend hors-ligne/)).toBeNull()
   })
 

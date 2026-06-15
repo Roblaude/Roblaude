@@ -68,15 +68,20 @@ describe('apiFetch', () => {
 })
 
 describe('objectsApi', () => {
-  it('listObjects -> data', async () => {
-    global.fetch = ok({ data: [{ id: 1, name: 'o', available: true, locationId: 1, imageUrl: null }] })
+  it('listObjects -> GET /objects', async () => {
+    const f = ok({ data: [{ id: 1, name: 'o', available: true, locationId: 1, imageUrl: null }] })
+    global.fetch = f
     const objs = await listObjects()
     expect(objs).toHaveLength(1)
+    expect(f).toHaveBeenCalledWith('/api/objects', expect.anything())
   })
-  it('createObject -> objet créé', async () => {
-    global.fetch = ok({ data: { id: 2, name: 'x', available: true, locationId: 1, imageUrl: null } }, 201)
+  it('createObject -> POST /objects avec body', async () => {
+    const f = ok({ data: { id: 2, name: 'x', available: true, locationId: 1, imageUrl: null } }, 201)
+    global.fetch = f
     const o = await createObject({ name: 'x', locationId: 1 })
     expect(o.id).toBe(2)
+    expect(f).toHaveBeenCalledWith('/api/objects', expect.objectContaining({ method: 'POST' }))
+    expect(JSON.parse((f.mock.calls[0][1] as RequestInit).body as string)).toMatchObject({ name: 'x', locationId: 1 })
   })
   it('updateObject -> objet maj', async () => {
     global.fetch = ok({ data: { id: 2, name: 'x', available: false, locationId: 1, imageUrl: null } })
@@ -94,28 +99,40 @@ describe('objectsApi', () => {
 })
 
 describe('autres wrappers REST', () => {
-  it('commandArm POST sans erreur', async () => {
-    global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) })
-    await expect(commandArm(1, { joint1: 0, joint2: 0, joint3: 0, joint4: 0, joint5: 0, joint6: 0 })).resolves.toBeUndefined()
+  it('commandArm -> POST /robots/:id/arm avec les articulations', async () => {
+    const f = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) })
+    global.fetch = f
+    const cmd = { joint1: 1, joint2: 2, joint3: 3, joint4: 4, joint5: 5, joint6: 6 }
+    await commandArm(1, cmd)
+    expect(f).toHaveBeenCalledWith('/api/robots/1/arm', expect.objectContaining({ method: 'POST' }))
+    expect(JSON.parse((f.mock.calls[0][1] as RequestInit).body as string)).toMatchObject(cmd)
   })
-  it('startMapping -> sessionId', async () => {
-    global.fetch = ok({ sessionId: 7, state: 'STARTING' })
+  it('startMapping -> POST /mapping/start', async () => {
+    const f = ok({ sessionId: 7, state: 'STARTING' })
+    global.fetch = f
     const r = await startMapping(1)
     expect(r.sessionId).toBe(7)
+    expect(f).toHaveBeenCalledWith('/api/mapping/start', expect.objectContaining({ method: 'POST' }))
   })
-  it('listSessions -> tableau', async () => {
-    global.fetch = ok([{ id: 1, robotId: 1, state: 'STOPPED', startedAt: '', endedAt: null, coverageM2: null, failureReason: null }])
+  it('listSessions -> GET /mapping/sessions?robotId', async () => {
+    const f = ok([{ id: 1, robotId: 1, state: 'STOPPED', startedAt: '', endedAt: null, coverageM2: null, failureReason: null }])
+    global.fetch = f
     const r = await listSessions(1)
     expect(r).toHaveLength(1)
+    expect(f).toHaveBeenCalledWith('/api/mapping/sessions?robotId=1', expect.anything())
   })
-  it('fetchSshAudit -> tableau', async () => {
-    global.fetch = ok([])
-    const r = await fetchSshAudit(1)
-    expect(Array.isArray(r)).toBe(true)
+  it('fetchSshAudit -> GET /admin/ssh/audit', async () => {
+    const f = ok([])
+    global.fetch = f
+    await fetchSshAudit(1)
+    expect(f.mock.calls[0][0]).toContain('/api/admin/ssh/audit')
   })
-  it('execSsh -> stdout', async () => {
-    global.fetch = ok({ stdout: 'ok', stderr: '', code: 0 })
+  it('execSsh -> POST /admin/ssh/exec avec la commande', async () => {
+    const f = ok({ stdout: 'ok', stderr: '', code: 0 })
+    global.fetch = f
     const r = await execSsh(1, 'ls')
     expect(r.stdout).toBe('ok')
+    expect(f).toHaveBeenCalledWith('/api/admin/ssh/exec', expect.objectContaining({ method: 'POST' }))
+    expect(JSON.parse((f.mock.calls[0][1] as RequestInit).body as string)).toMatchObject({ robotId: 1, command: 'ls' })
   })
 })

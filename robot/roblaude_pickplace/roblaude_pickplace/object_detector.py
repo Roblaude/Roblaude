@@ -11,7 +11,7 @@ Porte de la stack vision du prof, recale sur notre materiel et nos canaux :
 Le node n'actionne rien : il observe et publie des positions. C'est
 mission_executor (seul proprietaire du bras) qui consomme ces detections.
 
-    ros2 run roblaude_arm object_detector
+    ros2 run roblaude_pickplace object_detector
 """
 import numpy as np
 import rclpy
@@ -22,8 +22,8 @@ from geometry_msgs.msg import Pose, PoseArray
 from sensor_msgs.msg import CameraInfo, Image
 from std_msgs.msg import String
 
-from roblaude_arm.color import hex_to_hsv_ranges
-from roblaude_arm.detection import backproject, sample_depth_median
+from roblaude_pickplace.color import hex_to_hsv_ranges
+from roblaude_pickplace.detection import backproject, sample_depth_median
 
 
 def decode_image(msg: Image):

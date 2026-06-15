@@ -41,8 +41,8 @@ from std_msgs.msg import String
 
 import tf2_ros
 
-from roblaude_arm.arm_kin import ArmGeometry, compute_ik, rad_to_servo
-from roblaude_arm.detection import select_best_detection, transform_point
+from roblaude_pickplace.arm_kin import ArmGeometry, compute_ik, rad_to_servo
+from roblaude_pickplace.detection import select_best_detection, transform_point
 
 # arm_msgs vient du workspace Yahboom. Import optionnel : sans lui, les commandes
 # bras sont loggees mais pas envoyees (utile en simu/CI).

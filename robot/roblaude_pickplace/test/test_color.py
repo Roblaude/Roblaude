@@ -1,5 +1,5 @@
 """Tests de la conversion hex -> plages HSV — hors ROS, hors OpenCV."""
-from roblaude_arm.color import hex_to_hsv_ranges
+from roblaude_pickplace.color import hex_to_hsv_ranges
 
 
 def test_rouge_wrappe_en_deux_plages():

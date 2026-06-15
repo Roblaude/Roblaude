@@ -7,7 +7,7 @@ Code ROS2 Humble du robot RobLaude (Yahboom ROSMASTER M3 PRO, Jetson Nano).
 ```
 robot/
 ├── roblaude_nav/      # Navigation autonome — SLAM + Nav2          [Sprint 3]
-├── roblaude_arm/      # Contrôle bras 6 DOF — MoveIt2              [Sprint 6]  (à venir)
+├── roblaude_pickplace/      # Contrôle bras 6 DOF — MoveIt2              [Sprint 6]  (à venir)
 ├── roblaude_vision/   # Détection objets — OpenCV                  [Sprint 6]  (à venir)
 ├── roblaude_mqtt/     # Bridge MQTT ↔ ROS2                         [Sprint 4]  (à venir)
 ├── roblaude_sim/      # Configs Gazebo (monde, modèles)            (à venir)

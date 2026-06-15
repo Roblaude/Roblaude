@@ -3,7 +3,7 @@ import math
 
 import numpy as np
 
-from roblaude_arm.detection import (backproject, sample_depth_median,
+from roblaude_pickplace.detection import (backproject, sample_depth_median,
                                     select_best_detection, transform_point)
 
 

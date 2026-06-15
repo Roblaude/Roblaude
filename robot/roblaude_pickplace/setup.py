@@ -2,7 +2,7 @@ import os
 from glob import glob
 from setuptools import setup
 
-package_name = 'roblaude_arm'
+package_name = 'roblaude_pickplace'
 
 setup(
     name=package_name,
@@ -26,7 +26,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'object_detector = roblaude_arm.object_detector:main',
+            'object_detector = roblaude_pickplace.object_detector:main',
         ],
     },
 )

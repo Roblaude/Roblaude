@@ -1,7 +1,7 @@
 """Tests de la lib IK — hors ROS, juste pytest."""
 import math
 
-from roblaude_arm.arm_kin import ArmGeometry, clamp, compute_ik, rad_to_servo
+from roblaude_pickplace.arm_kin import ArmGeometry, clamp, compute_ik, rad_to_servo
 
 
 def test_clamp():

@@ -3,6 +3,8 @@ import * as THREE from 'three'
 import URDFLoader from 'urdf-loader'
 import { Bot, Maximize2, Minimize2, X, AlertTriangle } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
+import { useMappingStore } from '@/stores/mappingStore'
+import { armPoseToUrdfJoints } from '@/lib/armUrdf'
 
 // Viewer 3D fidele du bras Yahboom M3 Pro via urdf-loader.
 // Charge l'URDF reel servi par le backend (/robot_assets/m3pro.urdf.xml)
@@ -22,6 +24,7 @@ interface JointMap {
 
 export function URDFViewer({ robotId, enabled = true }: Props) {
   const token = useAuthStore((s) => s.token)
+  const armPose = useMappingStore((s) => s.armPose)
   const containerRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<{
     scene: THREE.Scene
@@ -128,6 +131,9 @@ export function URDFViewer({ robotId, enabled = true }: Props) {
         if (msg.type !== 'joint_states') return
         const ref = sceneRef.current
         if (!ref || !ref.joints || !Array.isArray(msg.names) || !Array.isArray(msg.positions)) return
+        // robot open-loop : joint_states publie 0 partout (pas d'encodeurs).
+        // on ignore ces messages nuls pour ne pas ecraser la pose miroir.
+        if (msg.positions.every((p: number) => p === 0)) return
         // mappe par nom (vraie cinematique URDF, pas un mapping invente)
         for (let i = 0; i < msg.names.length; i++) {
           const jointName = msg.names[i]
@@ -143,6 +149,17 @@ export function URDFViewer({ robotId, enabled = true }: Props) {
     }
     return () => ws.close()
   }, [enabled, token, robotId])
+
+  // miroir : applique la derniere pose commandee (degres) sur le modele 3D.
+  // sert tant que le robot reste open-loop — sinon les joint_states reels prennent le relais.
+  useEffect(() => {
+    if (status !== 'ready' || !armPose) return
+    const ref = sceneRef.current
+    if (!ref?.joints) return
+    for (const [name, val] of Object.entries(armPoseToUrdfJoints(armPose))) {
+      ref.joints[name]?.setJointValue(val)
+    }
+  }, [armPose, status])
 
   useEffect(() => {
     const onFs = (): void => setFullscreen(!!document.fullscreenElement)

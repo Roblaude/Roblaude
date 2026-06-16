@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { ArmCommand } from '@/lib/armApi'
 
 export type MappingState = 'IDLE' | 'STARTING' | 'RUNNING' | 'STOPPING' | 'STOPPED' | 'FAILED'
 
@@ -47,6 +48,8 @@ interface MappingStore {
   // tf/topics (T3.5.11)
   tfFrames: { id: string; parent: string }[] | null
   topics: { name: string; msgType: string }[] | null
+  // derniere pose bras commandee (degres) — miroir 3D, le robot est open-loop
+  armPose: ArmCommand | null
 
   setState: (state: MappingState) => void
   setSession: (sessionId: number | null) => void
@@ -64,6 +67,7 @@ interface MappingStore {
   setRobotPose: (p: Pose | null) => void
   setTfFrames: (f: { id: string; parent: string }[] | null) => void
   setTopics: (t: { name: string; msgType: string }[] | null) => void
+  setArmPose: (p: ArmCommand) => void
   reset: () => void
 }
 
@@ -83,6 +87,7 @@ export const useMappingStore = create<MappingStore>((set, get) => ({
   robotPose: null,
   tfFrames: null,
   topics: null,
+  armPose: null,
 
   setState: (state) => set({ state }),
   setSession: (sessionId) => set({ sessionId }),
@@ -111,6 +116,7 @@ export const useMappingStore = create<MappingStore>((set, get) => ({
   setRobotPose: (p) => set({ robotPose: p }),
   setTfFrames: (f) => set({ tfFrames: f }),
   setTopics: (t) => set({ topics: t }),
+  setArmPose: (p) => set({ armPose: p }),
 
   reset: () => {
     const prev = get().mapPngUrl

@@ -1,7 +1,8 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { Bot, Send, RotateCcw, AlertTriangle, Power, PowerOff, Crosshair } from 'lucide-react'
 import { toast } from 'sonner'
 import { commandArm, commandArmPreset, type ArmCommand, type ArmPresetName } from '@/lib/armApi'
+import { useMappingStore } from '@/stores/mappingStore'
 
 // Controle direct du bras 6-DOF Yahboom M3 Pro.
 // joint1..5 : axes du bras (-180..180 degres)
@@ -38,6 +39,13 @@ export function ArmController({ robotId }: Props) {
   const [busy, setBusy] = useState(false)
   const [armed, setArmed] = useState(false)  // safety toggle
   const lastSentRef = useRef<number>(0)
+  const setArmPose = useMappingStore((s) => s.setArmPose)
+
+  // miroir 3D : le bras est open-loop (joint_states=0), donc on pousse la pose
+  // affichee dans le store pour que URDFViewer la reflete (montage = HOME, sliders, presets)
+  useEffect(() => {
+    setArmPose(pose)
+  }, [pose, setArmPose])
 
   const send = useCallback(async (cmd: ArmCommand): Promise<void> => {
     if (!armed) {

@@ -115,7 +115,7 @@ test.describe('UC-01 — flux mission transport', () => {
 
     await page.goto('/')
     // attend que les missions soient chargées (sinon STOP dit "aucune mission active")
-    await expect(page.getByText('#007')).toBeVisible()
+    await expect(page.getByRole('link', { name: '#007 · Transport' })).toBeVisible()
 
     const stopBtn = page.getByRole('button', { name: "Arrêt d'urgence du robot" })
     await expect(stopBtn).toBeEnabled()

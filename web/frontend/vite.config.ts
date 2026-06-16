@@ -27,6 +27,11 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
       },
+      // urdf + meshes STL servis par le backend, sinon le fallback SPA renvoie index.html
+      '/robot_assets': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
     },
   },
   plugins: [

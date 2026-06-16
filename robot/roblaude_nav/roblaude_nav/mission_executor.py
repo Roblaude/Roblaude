@@ -47,11 +47,20 @@ from roblaude_pickplace.detection import select_best_detection, transform_point
 # arm_msgs vient du workspace Yahboom. Import optionnel : sans lui, les commandes
 # bras sont loggees mais pas envoyees (utile en simu/CI).
 try:
-    from arm_msgs.msg import ArmJoints
+    from arm_msgs.msg import ArmJoint, ArmJoints
     HAS_ARM_MSGS = True
 except ImportError:
+    ArmJoint = None
     ArmJoints = None
     HAS_ARM_MSGS = False
+
+# Pince (gripper) = servo id 6, pilote par le message single-servo ArmJoint sur
+# /arm_joint (canal fiable, verifie en reel). Convention de CE bras :
+# 0 = OUVERT, 180 = FERME (inverse de la doc generique). joint6 de /arm6_joints
+# ne fait pas un open/close propre — on passe donc par /arm_joint.
+GRIPPER_SERVO_ID = 6
+GRIPPER_OPEN = 0
+GRIPPER_CLOSE = 180
 
 SCHEMA_VERSION = 1
 
@@ -80,11 +89,14 @@ class MissionExecutor(Node):
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         # Couleur cible imposee au detecteur (Option 2 : couleur du GraspObject)
         self.color_pub = self.create_publisher(String, '/roblaude/target_color', 10)
-        # Bras Yahboom (arm_msgs/ArmJoints) — meme topic que le bridge
+        # Bras Yahboom : joints 1-5 sur /arm6_joints (ArmJoints), pince sur
+        # /arm_joint (ArmJoint, single servo id=6) — canal fiable pour la pince.
         if HAS_ARM_MSGS:
             self.arm_pub = self.create_publisher(ArmJoints, '/arm6_joints', 10)
+            self.gripper_pub = self.create_publisher(ArmJoint, '/arm_joint', 10)
         else:
             self.arm_pub = None
+            self.gripper_pub = None
             self.get_logger().warn('arm_msgs absent — commandes bras loggees seulement')
 
         # Action client vers Nav2
@@ -99,8 +111,10 @@ class MissionExecutor(Node):
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
         # --- Parametres bras / pick&place ---
-        self.gripper_open = int(self.declare_parameter('gripper_open_value', 30).value)
-        self.gripper_close = int(self.declare_parameter('gripper_close_value', 75).value)
+        self.gripper_open = int(
+            self.declare_parameter('gripper_open_value', GRIPPER_OPEN).value)
+        self.gripper_close = int(
+            self.declare_parameter('gripper_close_value', GRIPPER_CLOSE).value)
         self.detect_timeout = float(self.declare_parameter('detect_timeout', 15.0).value)
         self.grasp_step_period = float(self.declare_parameter('grasp_step_period', 1.5).value)
         self.deposit_period = float(self.declare_parameter('deposit_period', 2.0).value)
@@ -397,7 +411,9 @@ class MissionExecutor(Node):
     # ------------- helpers -------------
 
     def _send_arm(self, joints5, gripper_servo):
-        """5 angles radians + valeur pince servo -> ArmJoints sur /arm6_joints."""
+        """5 angles radians (rad_to_servo: 0 rad = 90 = neutre) -> /arm6_joints,
+        + la pince via /arm_joint (canal fiable). joint6 de /arm6_joints recopie
+        juste la valeur pince pour rester coherent."""
         servos = [int(rad_to_servo(a)) for a in joints5]
         if self.arm_pub is not None:
             msg = ArmJoints()
@@ -406,7 +422,18 @@ class MissionExecutor(Node):
             msg.joint6 = int(gripper_servo)
             msg.time = self.arm_time_ms
             self.arm_pub.publish(msg)
+        self._send_gripper(gripper_servo)
         self.get_logger().info(f'bras -> {servos} pince={gripper_servo}')
+
+    def _send_gripper(self, value):
+        """Pince via /arm_joint single-servo id=6 (canal fiable). 0=ouvert, 180=ferme."""
+        if self.gripper_pub is None:
+            return
+        msg = ArmJoint()
+        msg.id = GRIPPER_SERVO_ID
+        msg.joint = int(value)
+        msg.time = self.arm_time_ms
+        self.gripper_pub.publish(msg)
 
     def _cancel_timer(self, attr):
         timer = getattr(self, attr, None)

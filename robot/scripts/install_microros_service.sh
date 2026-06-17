@@ -17,6 +17,9 @@ echo "━━━ 1/4 : helpers dans /usr/local/bin ━━━"
 sudo install -m 0755 "$SRC/roblaude-link-stm32.sh"       /usr/local/bin/roblaude-link-stm32.sh
 sudo install -m 0755 "$SRC/roblaude-stm32-healthcheck.sh" /usr/local/bin/roblaude-stm32-healthcheck.sh
 
+echo "━━━ 1bis/4 : dossier diag root-owned ━━━"
+sudo install -d -o root -g root -m 0755 /var/log/roblaude
+
 echo "━━━ 2/4 : units systemd ━━━"
 sudo install -m 0644 "$SRC/systemd/micro-ros-agent.service"            /etc/systemd/system/micro-ros-agent.service
 sudo install -m 0644 "$SRC/systemd/roblaude-stm32-healthcheck.service" /etc/systemd/system/roblaude-stm32-healthcheck.service

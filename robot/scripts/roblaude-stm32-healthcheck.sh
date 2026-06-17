@@ -4,10 +4,14 @@
 # capturer le diag pour ne plus rediagnostiquer de zero, puis relink + restart.
 set -u
 SVC=micro-ros-agent.service
-DIAGDIR=/home/jetson/roblaude_diag
+# Tourne en root (oneshot systemd) : on garde le diag dans un dossier root-owned,
+# pas dans /home/jetson (sinon un compte jetson compromis pourrait piéger le chemin
+# par symlink et faire écrire root ailleurs). 0755 => lisible sans sudo.
+DIAGDIR=/var/log/roblaude
 STAMP=/run/roblaude-stm32-last-restart
 COOLDOWN=300
-mkdir -p "$DIAGDIR"
+[ -L "$DIAGDIR" ] && { echo "$DIAGDIR est un symlink, abort" >&2; exit 1; }
+install -d -o root -g root -m 0755 "$DIAGDIR" 2>/dev/null || mkdir -p "$DIAGDIR"
 reason=""
 
 # 1. container agent vivant ?
@@ -34,6 +38,7 @@ fi
 
 # --- incident ---
 F="$DIAGDIR/incident_$(date +%Y%m%d-%H%M%S).log"
+[ -L "$F" ] && rm -f "$F"   # jamais suivre un symlink piégé
 {
   echo "REASON: $reason"; date; uptime
   echo "--- myserial ---"; ls -l /dev/myserial 2>&1; ls -l /dev/serial/by-id 2>&1
@@ -50,4 +55,5 @@ if [ $((now-last)) -ge $COOLDOWN ]; then
 else
   echo "cooldown actif, pas de restart"
 fi
-ls -1t "$DIAGDIR"/incident_*.log 2>/dev/null | tail -n +31 | xargs -r rm -f
+# garde les 30 plus recents (noms horodates -> tri lexical = chronologique)
+find "$DIAGDIR" -maxdepth 1 -name 'incident_*.log' -type f | sort | head -n -30 | while read -r f; do rm -f -- "$f"; done

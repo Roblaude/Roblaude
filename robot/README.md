@@ -97,4 +97,4 @@ Lancés depuis le Mac/PC, pas dans le container ROS2.
   un problème de câble**, c'est la cible série.
 - **Persistance** : `install_microros_service.sh` installe l'agent en service systemd
   (relink + restart auto) + un healthcheck (timer 2 min) qui capture le diag dans
-  `~/roblaude_diag/` à chaque incident.
+  `/var/log/roblaude/` à chaque incident.

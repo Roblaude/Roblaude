@@ -1,0 +1,15 @@
+[Unit]
+Description=RobLaude STM32 micro-ROS healthcheck
+After=micro-ros-agent.service docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/roblaude-stm32-healthcheck.sh
+# Tourne en root (besoin de systemctl restart + docker) mais on cadre les degats.
+NoNewPrivileges=yes
+ProtectHome=yes
+# ProtectHome cache /home => HOME indefini => warning docker. /tmp est prive (PrivateTmp).
+Environment=HOME=/tmp
+ProtectSystem=full
+PrivateTmp=yes
+ReadWritePaths=/var/log/roblaude /run

@@ -76,7 +76,10 @@ Lancés depuis le Mac/PC, pas dans le container ROS2.
 | `deploy_to_robot.sh` | Déploie le code vers le robot via rsync |
 | `connect.sh` | SSH + noVNC vers le robot |
 | `Docker_M3Pro_Joy.sh` | Lance le container ROS2 principal (nom fixe `m3pro_main`) |
-| `start_agent.sh` | Lance le container micro-ROS-agent (nom fixe `micro_ros_agent`) |
+| `start_agent.sh` | (legacy) lancement manuel de l'agent micro-ROS — remplacé par le service systemd |
+| `install_microros_service.sh` | Installe l'agent micro-ROS en service systemd + healthcheck (à lancer sur le Jetson) |
+| `roblaude-link-stm32.sh` | Lie `/dev/myserial` au STM32 (CP210x), jamais au CH340 (micro) |
+| `roblaude-stm32-healthcheck.sh` | Vérifie la session STM32, capture le diag et relance l'agent si KO |
 
 ## Notes matérielles
 
@@ -85,3 +88,13 @@ Lancés depuis le Mac/PC, pas dans le container ROS2.
 - **Caméra** : c'est une **Orbbec DaBai DCW2** (et non une RealSense comme indiqué
   initialement dans le CDC).
 - **LiDAR** : le M3 PRO produit 2 demi-scans (`/scan0` + `/scan1`) fusionnés en `/scan`.
+- **Série / STM32** : il y a **deux** adaptateurs USB-série. Le STM32 (base, batterie,
+  moteurs, bras) est un **CP2104 = `10c4:ea60`** → c'est lui que `/dev/myserial` doit
+  viser. Le **CH340 = `1a86`** est le **micro** (`speech.rules` le mappe sur `/dev/mic`).
+  Ne jamais pointer l'agent micro-ROS sur le CH340. L'ordre `ttyUSB0/1` change au boot,
+  donc on keye sur la puce, pas sur le numéro. Symptôme du mauvais port : l'agent affiche
+  `running... fd: 3` puis plus rien, `YB_Node` absent, `/battery` muet — **ce n'est pas
+  un problème de câble**, c'est la cible série.
+- **Persistance** : `install_microros_service.sh` installe l'agent en service systemd
+  (relink + restart auto) + un healthcheck (timer 2 min) qui capture le diag dans
+  `/var/log/roblaude/` à chaque incident.

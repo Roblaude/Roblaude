@@ -4,6 +4,7 @@ export interface GraspObject {
   id: number
   name: string
   imageUrl: string | null
+  color: string
   available: boolean
   locationId: number
   location?: { id: number; name: string; slug: string }
@@ -12,6 +13,7 @@ export interface GraspObject {
 export interface ObjectInput {
   name: string
   imageUrl?: string
+  color?: string
   available?: boolean
   locationId: number
 }

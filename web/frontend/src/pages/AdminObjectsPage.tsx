@@ -11,11 +11,13 @@ interface ObjectForm {
   id: number | null
   name: string
   imageUrl: string
+  color: string
   available: boolean
   locationId: string
 }
 
-const EMPTY_FORM: ObjectForm = { id: null, name: '', imageUrl: '', available: true, locationId: '' }
+// #ff0000 = défaut côté schéma/détecteur robot (ne pas changer le comportement existant)
+const EMPTY_FORM: ObjectForm = { id: null, name: '', imageUrl: '', color: '#ff0000', available: true, locationId: '' }
 
 export function AdminObjectsPage() {
   const [objects, setObjects] = useState<GraspObject[]>([])
@@ -57,6 +59,7 @@ export function AdminObjectsPage() {
       id: o.id,
       name: o.name,
       imageUrl: o.imageUrl ?? '',
+      color: o.color ?? '#ff0000',
       available: o.available,
       locationId: String(o.locationId),
     })
@@ -79,6 +82,7 @@ export function AdminObjectsPage() {
     const payload = {
       name: form.name.trim(),
       imageUrl: form.imageUrl.trim() || undefined,
+      color: form.color,
       available: form.available,
       locationId: Number(form.locationId),
     }
@@ -176,6 +180,23 @@ export function AdminObjectsPage() {
             />
           </div>
 
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="o-color" className="text-sm font-medium text-gray-300">
+              Couleur cible <span className="text-gray-500">(détection vision)</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="o-color"
+                type="color"
+                value={form.color}
+                onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
+                className="h-9 w-12 rounded border border-gray-700 bg-gray-800 p-1 cursor-pointer"
+                aria-label="Couleur cible de l'objet"
+              />
+              <span className="font-mono text-sm text-gray-400">{form.color}</span>
+            </div>
+          </div>
+
           <div className="flex items-center gap-2 sm:col-span-2">
             <input
               id="o-available"
@@ -217,7 +238,7 @@ export function AdminObjectsPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-900 border-b border-gray-800">
             <tr>
-              {['Nom', 'Emplacement', 'Disponible', 'Actions'].map((h) => (
+              {['Nom', 'Emplacement', 'Couleur', 'Disponible', 'Actions'].map((h) => (
                 <th key={h} className="text-left text-xs text-gray-500 font-medium uppercase tracking-wider px-4 py-3">
                   {h}
                 </th>
@@ -228,20 +249,26 @@ export function AdminObjectsPage() {
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <tr key={i} className="bg-gray-950">
-                  <td colSpan={4} className="px-4 py-3">
+                  <td colSpan={5} className="px-4 py-3">
                     <div className="h-4 bg-gray-800 rounded animate-pulse" />
                   </td>
                 </tr>
               ))
             ) : objects.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-12 text-center text-gray-500">Aucun objet enregistré</td>
+                <td colSpan={5} className="px-4 py-12 text-center text-gray-500">Aucun objet enregistré</td>
               </tr>
             ) : (
               objects.map((o) => (
                 <tr key={o.id} className="bg-gray-950 hover:bg-gray-900 transition-colors">
                   <td className="px-4 py-3 text-gray-200">{o.name}</td>
                   <td className="px-4 py-3 text-gray-400">{o.location?.name ?? `#${o.locationId}`}</td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center gap-2">
+                      <span className="size-4 rounded border border-gray-700" style={{ backgroundColor: o.color }} />
+                      <span className="font-mono text-xs text-gray-500">{o.color}</span>
+                    </span>
+                  </td>
                   <td className="px-4 py-3">
                     {o.available ? (
                       <span className="text-emerald-400">Oui</span>

@@ -1,11 +1,14 @@
 #!/bin/bash
-# start_agent.sh — Lance le container micro-ROS-agent avec nom fixe
-#
-# Identique a la logique Docker_M3Pro_Joy.sh : nom fixe "micro_ros_agent"
-# -> pas de nouveau container a chaque reboot.
+# start_agent.sh — (LEGACY) lancement manuel de l'agent micro-ROS.
+# Prefere le service systemd : install_microros_service.sh. Ici on garde le
+# lancement manuel pour le debug, mais on relie d'abord /dev/myserial au bon
+# port (CP210x = STM32, jamais le CH340 = micro) via le helper partage.
 
 CONTAINER_NAME="micro_ros_agent"
 IMAGE="192.168.2.51:5000/micro-ros-agent:humble"
+
+# Garde-fou : /dev/myserial doit viser le STM32 (CP210x), pas le micro (CH340).
+[ -x "$(dirname "$0")/roblaude-link-stm32.sh" ] && "$(dirname "$0")/roblaude-link-stm32.sh" || true
 
 # Attend Docker
 while ! systemctl is-active --quiet docker; do

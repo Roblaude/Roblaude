@@ -1,0 +1,21 @@
+[Unit]
+Description=RobLaude micro-ROS Agent bridge STM32 -> ROS 2
+Requires=docker.service
+After=docker.service systemd-udev-settle.service
+Wants=network-online.target systemd-udev-settle.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+TimeoutStartSec=120
+TimeoutStopSec=20
+
+# Lie /dev/myserial au CP210x (STM32) — jamais le CH340 (micro). Cf roblaude-link-stm32.sh
+ExecStartPre=/usr/local/bin/roblaude-link-stm32.sh
+ExecStartPre=-/usr/bin/docker rm -f micro_ros_agent
+ExecStart=/usr/bin/docker run --rm --init --name micro_ros_agent --net=host --privileged -v /dev:/dev -v /dev/shm:/dev/shm 192.168.2.51:5000/micro-ros-agent:humble serial --dev /dev/myserial -b 2000000 -v4
+ExecStop=/usr/bin/docker stop -t 10 micro_ros_agent
+
+[Install]
+WantedBy=multi-user.target

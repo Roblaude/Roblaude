@@ -1,0 +1,7 @@
+[Unit]
+Description=RobLaude STM32 micro-ROS healthcheck
+After=micro-ros-agent.service docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/roblaude-stm32-healthcheck.sh

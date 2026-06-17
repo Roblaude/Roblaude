@@ -10,6 +10,7 @@ import { AdminObjectsPage } from './pages/AdminObjectsPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { MappingPage } from './pages/MappingPage'
 import { AdminSshPage } from './pages/AdminSshPage'
+import { RobotRepairPage } from './pages/RobotRepairPage'
 import { LoginPage } from './pages/LoginPage'
 import { DegradedModeBanner } from './components/DegradedModeBanner'
 import { RequireAuth } from './components/RequireAuth'
@@ -52,6 +53,10 @@ export default function App() {
             <Route
               path="/admin/ssh"
               element={role === 'ADMIN' ? <AdminSshPage /> : <Navigate to="/" replace />}
+            />
+            <Route
+              path="/admin/repair"
+              element={role === 'ADMIN' ? <RobotRepairPage /> : <Navigate to="/" replace />}
             />
           </Route>
         </Route>

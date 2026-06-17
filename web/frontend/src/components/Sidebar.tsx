@@ -14,6 +14,7 @@ import {
   Terminal,
   Sparkles,
   Package,
+  Wrench,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -24,7 +25,8 @@ const NAV_ITEMS = [
   { to: '/admin', label: 'Admin', code: '05', Icon: Settings2, adminOnly: true },
   { to: '/admin/objects', label: 'Objets', code: '06', Icon: Package, adminOnly: true },
   { to: '/admin/ssh', label: 'SSH admin', code: '07', Icon: Terminal, adminOnly: true },
-  { to: '/profile', label: 'Profil', code: '07', Icon: User, adminOnly: false },
+  { to: '/admin/repair', label: 'Réparation', code: '08', Icon: Wrench, adminOnly: true },
+  { to: '/profile', label: 'Profil', code: '09', Icon: User, adminOnly: false },
 ]
 
 export function Sidebar() {

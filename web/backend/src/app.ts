@@ -11,6 +11,7 @@ import robotsRouter from './routes/robots'
 import mappingRouter from './routes/mapping'
 import annotationsRouter from './routes/annotations'
 import sshRouter from './routes/ssh'
+import robotOpsRouter from './routes/robotOps'
 
 const app = express()
 
@@ -45,6 +46,7 @@ app.use('/api/robots', authGuard, robotsRouter)
 app.use('/api/mapping', authGuard, mappingRouter)
 app.use('/api/annotations', authGuard, annotationsRouter)
 app.use('/api/admin/ssh', authGuard, sshRouter)
+app.use('/api/admin', authGuard, robotOpsRouter)
 
 // error handler — doit etre en dernier
 app.use(errorHandler)

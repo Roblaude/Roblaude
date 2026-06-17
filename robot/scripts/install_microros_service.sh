@@ -14,8 +14,9 @@ set -e
 SRC="$(cd "$(dirname "$0")" && pwd)"
 
 echo "━━━ 1/4 : helpers dans /usr/local/bin ━━━"
-sudo install -m 0755 "$SRC/roblaude-link-stm32.sh"       /usr/local/bin/roblaude-link-stm32.sh
+sudo install -m 0755 "$SRC/roblaude-link-stm32.sh"        /usr/local/bin/roblaude-link-stm32.sh
 sudo install -m 0755 "$SRC/roblaude-stm32-healthcheck.sh" /usr/local/bin/roblaude-stm32-healthcheck.sh
+sudo install -m 0755 "$SRC/roblaude-robot-status.sh"      /usr/local/bin/roblaude-robot-status.sh
 
 echo "━━━ 1bis/4 : dossier diag root-owned ━━━"
 sudo install -d -o root -g root -m 0755 /var/log/roblaude

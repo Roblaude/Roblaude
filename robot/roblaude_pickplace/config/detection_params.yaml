@@ -1,0 +1,23 @@
+# Parametres de detection objet — Orbbec Astra Pro (M3 PRO)
+# Les intrinseques ne sont PAS ici : object_detector les lit sur
+# /camera/color/camera_info. Ne restent que couleur cible + seuils.
+object_detector:
+  ros__parameters:
+    # --- Topics camera Orbbec ---
+    color_topic: /camera/color/image_raw
+    depth_topic: /camera/depth/image_raw
+    camera_info_topic: /camera/color/camera_info
+
+    # --- Couleur cible (hex) ---
+    # Defaut = rouge. Surcharge a chaud par la mission via /roblaude/target_color
+    # (le backend met la couleur du GraspObject dans cmd/mission).
+    target_color: "#ff0000"
+    h_tol: 10        # tolerance teinte (+- en HSV OpenCV 0..179)
+    s_min: 120       # saturation mini (evite le gris/blanc)
+    v_min: 70        # valeur mini (evite le noir)
+
+    # --- Seuils detection ---
+    min_contour_area: 500        # surface pixel mini pour compter
+    max_detection_depth: 1.0     # ignore au-dela (m)
+    min_detection_depth: 0.15    # ignore en-deca (m)
+    depth_scale: 0.001           # 16UC1 mm -> m

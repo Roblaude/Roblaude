@@ -111,10 +111,38 @@ else
     echo "[autostart] roblaude_nav.mission_executor pas encore build, skip"
 fi
 
+# --- 5) Camera RGB-D Orbbec DaBai DCW2 (couleur rgb8 + depth, meme driver) ---
+# Le driver publie /camera/color/image_raw (+compressed lu par le bridge -> front)
+# et /camera/depth/image_raw. Au boot, l'USB est enumere a frais : le device
+# repond (contrairement a un (re)lancement a chaud sur device deja occupe).
+if [ -f "$ROBLAUDE_WS/install/roblaude_nav/share/roblaude_nav/launch/camera.launch.py" ]; then
+    spawn_once camera ros2 launch roblaude_nav camera.launch.py
+else
+    echo "[autostart] camera.launch.py pas encore build, camera non lancee"
+fi
+
+# --- 6) Detecteur objet UC-02 (HSV+depth -> /roblaude/detections) ---
+# Consomme par mission_executor sur PICK_AND_PLACE. Always-on (decision C).
+if [ -f "$ROBLAUDE_WS/install/roblaude_pickplace/share/roblaude_pickplace/launch/pickplace.launch.py" ]; then
+    spawn_once detector ros2 launch roblaude_pickplace pickplace.launch.py
+else
+    echo "[autostart] roblaude_pickplace pas encore build, detecteur non lance"
+fi
+
+# --- 7) Bras en position connue (HOME) au demarrage ---
+# Pas de feedback servo : le bras peut etre dans n'importe quelle pose au boot.
+# On l'amene a HOME des que YB_Node repond, pour partir d'un etat connu.
+# Pose HOME officielle Yahboom M3 Pro : [90,120,10,20,90,0] (cf. ARM_PRESETS backend).
+ARM_HOME='{joint1: 90, joint2: 120, joint3: 10, joint4: 20, joint5: 90, joint6: 0, time: 2000}'
+ARM_STOW='{joint1: 90, joint2: 120, joint3: 10, joint4: 20, joint5: 90, joint6: 0, time: 1500}'
+( sleep 8; ros2 topic pub --once /arm6_joints arm_msgs/msg/ArmJoints "$ARM_HOME" ) \
+    >/tmp/roslogs/arm_home.log 2>&1 &
+
 echo "[autostart] tout lance. Logs : /tmp/roslogs/*.log"
 echo "[autostart] verif : ros2 topic list | head"
 
 # PID 1 doit rester en vie sinon le container meurt.
-# SIGTERM -> on tue proprement les enfants.
-trap 'echo "[autostart] SIGTERM — kill children"; pkill -TERM -P $$ ; sleep 2 ; pkill -KILL -P $$ ; exit 0' TERM INT
+# SIGTERM (arret gracieux) -> on range d'abord le bras (YB_Node encore vivant),
+# puis on tue proprement les enfants. Sur coupure brutale, impossible (pas de jus).
+trap 'echo "[autostart] SIGTERM — rangement bras puis kill"; ros2 topic pub --once /arm6_joints arm_msgs/msg/ArmJoints "$ARM_STOW" 2>/dev/null; sleep 3; pkill -TERM -P $$ ; sleep 2 ; pkill -KILL -P $$ ; exit 0' TERM INT
 tail -f /dev/null

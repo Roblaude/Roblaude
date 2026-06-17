@@ -1,13 +1,13 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>roblaude_nav</name>
+  <name>roblaude_pickplace</name>
   <version>0.1.0</version>
   <description>
-    Navigation autonome RobLaude — SLAM et Nav2 pour le ROSMASTER M3 PRO.
-    Contient les launch files capteurs (LiDAR, caméra, odométrie), la
-    cartographie SLAM Toolbox, la navigation Nav2, et les outils de
-    visualisation (Foxglove, web_video_server).
+    Pick and place RobLaude (UC-02) pour le bras du ROSMASTER M3 PRO.
+    Détection d'objet par couleur (HSV + depth Orbbec) et cinématique
+    inverse du bras. Portage de la stack vision du prof sur nos canaux
+    (/arm6_joints, /roblaude/detections).
   </description>
   <maintainer email="wissemkarboub@gmail.com">Wissem</maintainer>
   <license>MIT</license>
@@ -15,19 +15,13 @@
   <buildtool_depend>ament_python</buildtool_depend>
 
   <exec_depend>rclpy</exec_depend>
-  <exec_depend>nav_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
-  <exec_depend>tf2_ros</exec_depend>
-  <exec_depend>slam_toolbox</exec_depend>
-  <exec_depend>nav2_bringup</exec_depend>
-  <exec_depend>nav2_msgs</exec_depend>
-  <exec_depend>action_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
-  <exec_depend>roblaude_pickplace</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
   <exec_depend>arm_msgs</exec_depend>
-  <exec_depend>foxglove_bridge</exec_depend>
-  <exec_depend>web_video_server</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

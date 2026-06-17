@@ -1,31 +1,40 @@
 """
-camera.launch.py — Demarre la camera RGB-D Astra Pro du ROSMASTER M3 PRO
+camera.launch.py — Camera RGB-D Orbbec DaBai DCW2 du ROSMASTER M3 PRO
 
-La camera est une Orbbec Astra Pro (profondeur + RGB).
-Yahboom fournit le package `orbbec_camera` avec un launch file par modele.
+Le driver orbbec dabai_dcw2 ouvre lui-meme les deux interfaces de la camera
+(verifie dmesg : "Orbbec DaBai DCW2", 2bc5:0561 RGB UVC + 2bc5:06a0 depth) et
+publie tout :
+  - /camera/color/image_raw            : couleur rgb8 640x480 (UVC /dev/video0)
+  - /camera/color/image_raw/compressed : JPEG (lu par le bridge MQTT -> front)
+  - /camera/depth/image_raw            : profondeur 16UC1 (mm)
+  - /camera/color/camera_info          : intrinseques reelles
+  + sa propre TF (camera_link -> *_optical_frame).
 
-Ce launch inclut simplement le bon launch file Orbbec + les tf2 minimales.
+depth_registration:=true aligne la depth sur le repere couleur (meme driver) :
+les deux sortent en 640x480, donc object_detector peut indexer la depth au
+pixel couleur. On ajoute juste la TF statique base_link -> camera_link.
 
-Usage (sur le robot, dans le conteneur ROS 2) :
-    ros2 launch /path/to/camera.launch.py
+Note : le node Yahboom `pub_rgb_image` (de app_camera) est inutile ici — il ne
+fait que recompresser /camera/color/image_raw vers un topic que personne ne lit.
 
-Topics publies (principaux) :
-    /camera/color/image_raw       : image RGB
-    /camera/depth/image_raw       : carte de profondeur (16UC1, mm)
-    /camera/depth/color/points    : nuage de points (sensor_msgs/PointCloud2)
+Usage (dans le conteneur ROS 2) :
+    ros2 launch roblaude_nav camera.launch.py
 """
 
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
-from launch.substitutions import PathJoinSubstitution
 
 
 def generate_launch_description():
+    dabai = PathJoinSubstitution([
+        FindPackageShare('orbbec_camera'), 'launch', 'dabai_dcw2.launch.py'])
+
     return LaunchDescription([
-        # Transform statique base_link -> camera_link
+        # TF chassis -> camera (le driver fournit ensuite camera_link -> optical)
         Node(
             package='tf2_ros',
             executable='static_transform_publisher',
@@ -33,14 +42,9 @@ def generate_launch_description():
             arguments=['0.10', '0.0', '0.08', '0', '0', '0', 'base_link', 'camera_link'],
         ),
 
-        # Driver Orbbec Astra Pro (launch Yahboom officiel)
+        # Driver OrbbecSDK DaBai DCW2 : couleur + depth alignees (registration)
         IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([
-                PathJoinSubstitution([
-                    FindPackageShare('orbbec_camera'),
-                    'launch',
-                    'astra_pro2.launch.py'
-                ])
-            ])
+            PythonLaunchDescriptionSource([dabai]),
+            launch_arguments={'depth_registration': 'true'}.items(),
         ),
     ])

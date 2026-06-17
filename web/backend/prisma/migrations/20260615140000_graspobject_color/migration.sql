@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `GraspObject` ADD COLUMN `color` VARCHAR(191) NOT NULL DEFAULT '#ff0000';

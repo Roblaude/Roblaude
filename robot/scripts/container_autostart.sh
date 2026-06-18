@@ -100,6 +100,7 @@ if [ -f "$ROBLAUDE_WS/install/roblaude_mqtt/share/roblaude_mqtt/launch/mqtt_brid
 else
     echo "[autostart] roblaude_mqtt pas encore build, bridge non lance"
 fi
+sleep 3   # on etale le boot : evite le pic CPU qui resettait le SSH au demarrage
 
 # --- 4) mission_executor — recoit cmd MQTT et drive Nav2 ---
 # Necessite Nav2 (pas lance par defaut, juste base_bringup + URDF). Pour la
@@ -110,6 +111,7 @@ if [ -f "$ROBLAUDE_WS/install/roblaude_nav/lib/roblaude_nav/mission_executor" ];
 else
     echo "[autostart] roblaude_nav.mission_executor pas encore build, skip"
 fi
+sleep 2
 
 # --- 5) Camera RGB-D Orbbec DaBai DCW2 (couleur rgb8 + depth, meme driver) ---
 # Le driver publie /camera/color/image_raw (+compressed lu par le bridge -> front)
@@ -120,6 +122,7 @@ if [ -f "$ROBLAUDE_WS/install/roblaude_nav/share/roblaude_nav/launch/camera.laun
 else
     echo "[autostart] camera.launch.py pas encore build, camera non lancee"
 fi
+sleep 5   # laisse la camera (USB + 1ers frames) s'initialiser avant le detector qui la consomme
 
 # --- 6) Detecteur objet UC-02 (HSV+depth -> /roblaude/detections) ---
 # Consomme par mission_executor sur PICK_AND_PLACE. Always-on (decision C).

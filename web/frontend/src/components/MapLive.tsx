@@ -63,6 +63,7 @@ export function MapLive({ currentSnapshotId = null, annotations = [], onAnnotati
   // --- zoom / pan ---
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
   // drag en cours : on garde l'origine + on note si on a bouge (pour distinguer
   // un pan d'un clic d'annotation).
   const drag = useRef<{ x: number; y: number; panX: number; panY: number; moved: boolean } | null>(null)
@@ -79,6 +80,7 @@ export function MapLive({ currentSnapshotId = null, annotations = [], onAnnotati
   // le zoom se fait UNIQUEMENT avec les boutons +/-.
   const onPointerDown = useCallback((e: React.PointerEvent): void => {
     drag.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y, moved: false }
+    setIsDragging(true)
   }, [pan.x, pan.y])
   const onPointerMove = useCallback((e: React.PointerEvent): void => {
     const d = drag.current
@@ -90,6 +92,7 @@ export function MapLive({ currentSnapshotId = null, annotations = [], onAnnotati
   }, [])
   const onPointerUp = useCallback((): void => {
     drag.current = null
+    setIsDragging(false)
   }, [])
 
   // CSS fullscreen (au lieu de Fullscreen API) — comme ca les siblings
@@ -334,9 +337,9 @@ export function MapLive({ currentSnapshotId = null, annotations = [], onAnnotati
       {mapPngUrl ? (
         // viewport : capture molette + drag pour zoom/pan. overflow-hidden pour
         // que la carte agrandie ne deborde pas hors du cadre.
-        <div
-          className={`overflow-hidden flex items-center justify-center ${viewportClass} ${
-            drag.current ? 'cursor-grabbing' : 'cursor-grab'
+          <div
+            className={`overflow-hidden flex items-center justify-center ${viewportClass} ${
+            isDragging ? 'cursor-grabbing' : 'cursor-grab'
           }`}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}

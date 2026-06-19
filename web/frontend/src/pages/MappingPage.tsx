@@ -59,8 +59,20 @@ export function MappingPage() {
   }, [robotId, refreshKey])
 
   useEffect(() => {
-    if (!currentSnapshotId) { setAnnotations([]); return }
-    void listAnnotations(currentSnapshotId).then(setAnnotations).catch(() => setAnnotations([]))
+    let cancelled = false
+    void (async () => {
+      if (!currentSnapshotId) {
+        if (!cancelled) setAnnotations([])
+        return
+      }
+      try {
+        const items = await listAnnotations(currentSnapshotId)
+        if (!cancelled) setAnnotations(items)
+      } catch {
+        if (!cancelled) setAnnotations([])
+      }
+    })()
+    return () => { cancelled = true }
   }, [currentSnapshotId])
 
   return (

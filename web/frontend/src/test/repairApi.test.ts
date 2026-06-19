@@ -10,8 +10,14 @@ const mockFetch = vi.mocked(apiFetch)
 beforeEach(() => mockFetch.mockReset())
 
 describe('repairApi', () => {
-  it('REPAIR_LABELS couvre les 4 actions', () => {
-    expect(Object.keys(REPAIR_LABELS).sort()).toEqual(['reboot', 'reconnect_stm32', 'restart_ros', 'resync_clock'])
+  it('REPAIR_LABELS couvre les actions exposees', () => {
+    expect(Object.keys(REPAIR_LABELS).sort()).toEqual([
+      'reboot',
+      'reconnect_stm32',
+      'restart_ros',
+      'resync_clock',
+      'shutdown',
+    ])
   })
 
   it('runRepair POST la bonne route + body', async () => {

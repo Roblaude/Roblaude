@@ -1,20 +1,24 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { Map as MapIcon, Minus, X } from 'lucide-react'
 import { useMappingStore } from '@/stores/mappingStore'
+import { useDraggable } from '@/hooks/useDraggable'
 
-// Mini-map picture-in-picture (PIP) en bas a droite : version reduite de la
-// carte SLAM + position robot. Visible quand on est en plein ecran ou quand
-// la carte principale est masquee.
+// Mini-map picture-in-picture (PIP) : version reduite de la carte SLAM +
+// position robot. Panneau flottant DEPLACABLE (drag entete) + reductible + fermable.
 
 const PIP_W = 180
 const PIP_H = 120
 
-export function MiniMapPip() {
+export function MiniMapPip({ onClose }: { onClose?: () => void } = {}) {
   const { mapPngUrl, mapMeta, robotPose } = useMappingStore()
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [hidden, setHidden] = useState(false)
+  const [minimized, setMinimized] = useState(false)
+  const { pos, onDragStart } = useDraggable({ x: 16, y: window.innerHeight - 200 })
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !mapPngUrl || !mapMeta) return
+    if (!canvas || !mapPngUrl || !mapMeta || minimized) return
     canvas.width = PIP_W
     canvas.height = PIP_H
     const ctx = canvas.getContext('2d')
@@ -40,13 +44,48 @@ export function MiniMapPip() {
       }
     }
     img.src = mapPngUrl
-  }, [mapPngUrl, mapMeta, robotPose])
+  }, [mapPngUrl, mapMeta, robotPose, minimized])
 
   if (!mapPngUrl) return null
+
+  if (hidden) {
+    return (
+      <button
+        onClick={() => setHidden(false)}
+        className="fixed bottom-4 left-4 z-30 bg-gray-900 border border-gray-700 rounded p-2 text-gray-300 hover:text-white"
+        aria-label="Re-afficher la mini-carte"
+      >
+        <MapIcon className="w-4 h-4" />
+      </button>
+    )
+  }
+
   return (
-    <div className="fixed bottom-4 right-4 z-30 bg-gray-950 border border-gray-700 rounded shadow-lg p-1">
-      <canvas ref={canvasRef} style={{ imageRendering: 'pixelated' }} />
-      <div className="text-[9px] text-gray-500 text-center mt-0.5 font-mono">PIP</div>
+    <div
+      className="fixed z-30 bg-gray-950 border border-gray-700 rounded shadow-lg overflow-hidden"
+      style={{ left: pos.x, top: pos.y }}
+    >
+      <div
+        onPointerDown={onDragStart}
+        className="flex items-center justify-between bg-gray-900 px-2 py-1 border-b border-gray-800 cursor-move select-none"
+      >
+        <span className="flex items-center gap-1.5 text-[10px] text-gray-300 font-mono">
+          <MapIcon className="w-3 h-3" /> Mini-carte
+        </span>
+        <div className="flex items-center gap-1">
+          <button onClick={() => setMinimized((m) => !m)} className="text-gray-400 hover:text-white p-0.5" aria-label="Reduire">
+            <Minus className="w-3 h-3" />
+          </button>
+          <button onClick={() => (onClose ? onClose() : setHidden(true))} className="text-gray-400 hover:text-white p-0.5" aria-label="Fermer">
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      </div>
+      {!minimized && (
+        <div className="p-1">
+          <canvas ref={canvasRef} style={{ imageRendering: 'pixelated' }} />
+        </div>
+      )}
     </div>
   )
 }

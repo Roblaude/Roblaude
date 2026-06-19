@@ -29,6 +29,7 @@ class MappingSupervisor(Node):
         self.proc = None
         self.session_id = None
         self.state = 'IDLE'
+        self.mode = 'mapping'   # 'mapping' (slam+explore) ou 'localization' (amcl)
         self.started_at = None
         self.lock = threading.Lock()
 
@@ -52,6 +53,8 @@ class MappingSupervisor(Node):
             self.stop(data.get('messageId'))
         elif action == 'save':
             self.save(data.get('sessionId'), data.get('name'), data.get('messageId'))
+        elif action == 'localize':
+            self.localize(data.get('map'), data.get('messageId'))
         else:
             self.get_logger().warn(f'action inconnue: {action}')
 
@@ -61,6 +64,7 @@ class MappingSupervisor(Node):
                 self.get_logger().warn('mapping deja en cours, ignore start')
                 return
             self.session_id = session_id
+            self.mode = 'mapping'
             self.state = 'STARTING'
             self.started_at = time.time()
             self.publish_state()
@@ -137,9 +141,40 @@ class MappingSupervisor(Node):
                 'reason': 'timeout 30s map_saver_cli',
             })))
 
+    def localize(self, map_yaml, message_id):
+        # bascule en mode localisation : coupe le mapping en cours s'il y en a,
+        # puis lance amcl sur la carte figee (ne modifie pas la carte).
+        with self.lock:
+            if self.proc is not None:
+                try:
+                    os.killpg(os.getpgid(self.proc.pid), signal.SIGINT)
+                except ProcessLookupError:
+                    pass
+                self.proc = None
+            self.mode = 'localization'
+            self.state = 'STARTING'
+            self.started_at = time.time()
+            self.publish_state()
+            cmd = ['ros2', 'launch', 'roblaude_nav', 'localization.launch.py']
+            if map_yaml:
+                cmd.append(f'map:={map_yaml}')
+            try:
+                self.proc = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    preexec_fn=os.setsid,
+                )
+                threading.Thread(target=self._watch, daemon=True).start()
+            except Exception as e:
+                self.state = 'FAILED'
+                self.publish_state(failure_reason=str(e))
+                self.proc = None
+
     def publish_state(self, failure_reason=None):
         payload = {
             'state': self.state,
+            'mode': self.mode,
             'sessionId': self.session_id,
             'startedAt': self.started_at,
         }

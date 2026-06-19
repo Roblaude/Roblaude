@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { Camera, Maximize2, Minimize2, X } from 'lucide-react'
+import { Camera, Maximize2, Minimize2, X, Minus } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
+import { useDraggable } from '@/hooks/useDraggable'
 
 // Vue camera POV du robot. Recoit des frames PNG/JPEG via WS telemetry sur
 // un byte de type 0x02 (similaire au map). Le robot publie sur
 // roblaude/{id}/telemetry/camera (binary retained, throttle 5-10 Hz).
-// Composant flotant en haut-droite par defaut — toggle plein ecran via
-// Fullscreen API.
+// Panneau flottant DEPLACABLE (drag par l'entete) + reductible + fermable.
 
 const TYPE_CAMERA_FRAME = 0x02
 
@@ -14,16 +14,21 @@ interface Props {
   robotId: number
   // si false, on cache completement (pas de WS ouvert).
   enabled?: boolean
+  // si fourni, le bouton fermer remonte au parent (barre d'outils) au lieu
+  // de juste se cacher en interne.
+  onClose?: () => void
 }
 
-export function CameraView({ robotId, enabled = true }: Props) {
+export function CameraView({ robotId, enabled = true, onClose }: Props) {
   const token = useAuthStore((s) => s.token)
   const [frameUrl, setFrameUrl] = useState<string | null>(null)
   const [fullscreen, setFullscreen] = useState(false)
   const [hidden, setHidden] = useState(false)
+  const [minimized, setMinimized] = useState(false)
   const [connected, setConnected] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const prevUrlRef = useRef<string | null>(null)
+  const { pos, onDragStart } = useDraggable({ x: window.innerWidth - 288, y: 84 })
 
   useEffect(() => {
     if (!enabled || !token) return
@@ -86,44 +91,46 @@ export function CameraView({ robotId, enabled = true }: Props) {
     <div
       ref={containerRef}
       className={`bg-black border border-gray-700 rounded shadow-lg overflow-hidden z-30 ${
-        fullscreen ? '' : 'fixed top-20 right-4 w-64'
+        fullscreen ? '' : 'fixed w-64'
       }`}
+      style={fullscreen ? undefined : { left: pos.x, top: pos.y }}
     >
-      <div className="flex items-center justify-between bg-gray-900 px-2 py-1 border-b border-gray-800">
+      <div
+        onPointerDown={onDragStart}
+        className="flex items-center justify-between bg-gray-900 px-2 py-1 border-b border-gray-800 cursor-move select-none"
+      >
         <div className="flex items-center gap-1.5 text-xs text-gray-300">
           <Camera className="w-3 h-3" /> POV
           <span className={`size-1.5 rounded-full ${connected ? 'bg-green-500' : 'bg-gray-600'}`} />
         </div>
         <div className="flex items-center gap-1">
-          <button
-            onClick={toggleFs}
-            className="text-gray-400 hover:text-white p-0.5"
-            aria-label={fullscreen ? 'Quitter plein ecran' : 'Plein ecran'}
-          >
+          <button onClick={() => setMinimized((m) => !m)} className="text-gray-400 hover:text-white p-0.5" aria-label="Reduire">
+            <Minus className="w-3 h-3" />
+          </button>
+          <button onClick={toggleFs} className="text-gray-400 hover:text-white p-0.5"
+            aria-label={fullscreen ? 'Quitter plein ecran' : 'Plein ecran'}>
             {fullscreen ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
           </button>
-          <button
-            onClick={() => setHidden(true)}
-            className="text-gray-400 hover:text-white p-0.5"
-            aria-label="Cacher"
-          >
+          <button onClick={() => (onClose ? onClose() : setHidden(true))} className="text-gray-400 hover:text-white p-0.5" aria-label="Fermer">
             <X className="w-3 h-3" />
           </button>
         </div>
       </div>
-      <div className={`flex items-center justify-center bg-black ${fullscreen ? 'h-screen' : 'aspect-video'}`}>
-        {frameUrl ? (
-          <img
-            src={frameUrl}
-            alt="Camera POV"
-            className={fullscreen ? 'max-h-screen max-w-screen' : 'w-full h-full object-cover'}
-          />
-        ) : (
-          <div className="text-gray-600 text-xs p-4 text-center">
-            {connected ? 'En attente du premier frame…' : 'WS deconnecte'}
-          </div>
-        )}
-      </div>
+      {!minimized && (
+        <div className={`flex items-center justify-center bg-black ${fullscreen ? 'h-screen' : 'aspect-video'}`}>
+          {frameUrl ? (
+            <img
+              src={frameUrl}
+              alt="Camera POV"
+              className={fullscreen ? 'max-h-screen max-w-screen' : 'w-full h-full object-cover'}
+            />
+          ) : (
+            <div className="text-gray-600 text-xs p-4 text-center">
+              {connected ? 'En attente du premier frame…' : 'WS deconnecte'}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -43,6 +43,17 @@ export async function saveMapping(sessionId: number, name?: string): Promise<{ s
   return res.json()
 }
 
+// Bascule le robot en mode localisation (amcl sur carte figee). Le robot se
+// repere sur la carte sauvee sans la modifier.
+export async function startLocalization(robotId: number, map?: string): Promise<{ ok: boolean }> {
+  const res = await apiFetch('/mapping/localize', {
+    method: 'POST',
+    body: JSON.stringify({ robotId, ...(map ? { map } : {}) }),
+  })
+  if (!res.ok) throw new Error(`startLocalization ${res.status}`)
+  return res.json()
+}
+
 export async function listSessions(robotId: number): Promise<MappingSessionLite[]> {
   const res = await apiFetch(`/mapping/sessions?robotId=${robotId}`)
   if (!res.ok) throw new Error(`listSessions ${res.status}`)

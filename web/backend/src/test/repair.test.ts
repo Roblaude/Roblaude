@@ -49,6 +49,7 @@ describe('repairActions (pur)', () => {
     expect(repairCommand('reconnect_stm32')).toBe('sudo systemctl restart micro-ros-agent.service')
     expect(repairCommand('restart_ros')).toBe('docker restart m3pro')
     expect(repairCommand('reboot')).toBe('sudo reboot')
+    expect(repairCommand('shutdown')).toBe('docker stop -t 6 m3pro; sudo shutdown -h now')
     expect(repairCommand('resync_clock', '2026-06-17 10:00:00')).toBe('sudo date -u -s "2026-06-17 10:00:00"')
   })
 })
@@ -117,6 +118,25 @@ describe('POST /api/admin/robots/:id/repair', () => {
       .post(`/api/admin/robots/${robotId}/repair`)
       .set('Authorization', `Bearer ${adminToken}`)
       .send({ action: 'reboot', confirm: true })
+    expect(res.status).toBe(200)
+    expect(res.body.ok).toBe(true)
+  })
+
+  it('shutdown sans confirm -> 400', async () => {
+    const res = await request(app)
+      .post(`/api/admin/robots/${robotId}/repair`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ action: 'shutdown' })
+    expect(res.status).toBe(400)
+    expect(mockRunOnce).not.toHaveBeenCalled()
+  })
+
+  it('shutdown avec confirm -> ok meme si la connexion tombe', async () => {
+    mockRunOnce.mockRejectedValue(new Error('ssh timeout'))
+    const res = await request(app)
+      .post(`/api/admin/robots/${robotId}/repair`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ action: 'shutdown', confirm: true })
     expect(res.status).toBe(200)
     expect(res.body.ok).toBe(true)
   })

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Maximize2, Minimize2, Layers, MapPin as MapPinIcon } from 'lucide-react'
+import { Maximize2, Minimize2, Layers, MapPin as MapPinIcon, ZoomIn, ZoomOut, Crosshair } from 'lucide-react'
 import { toast } from 'sonner'
 import { useMappingStore } from '@/stores/mappingStore'
 import { worldToPixel, pixelToWorld } from '@/lib/mapProjection'
@@ -9,7 +9,10 @@ import { GhostLayer } from './GhostLayer'
 import { useRobotStore } from '@/stores/robotStore'
 
 // Carte SLAM live avec overlay canvas (scan, plan, frontiers, trail, heatmap)
-// + annotations cliquables + mode plein ecran.
+// + annotations cliquables + plein ecran + zoom/pan facon Foxglove.
+//
+// "Trop petite" reglé : la carte est upscalee pour remplir la vue (la petite
+// image PGM du debut d'explo n'est plus minuscule). Molette = zoom, drag = pan.
 
 interface LayerToggles {
   scan: boolean
@@ -35,6 +38,9 @@ interface Props {
   onAnnotationCreated?: (a: Annotation) => void
 }
 
+const ZOOM_MIN = 0.3
+const ZOOM_MAX = 16
+
 export function MapLive({ currentSnapshotId = null, annotations = [], onAnnotationCreated }: Props) {
   const { mapPngUrl, mapMeta, scan, plan, frontiers, trail, robotPose } = useMappingStore()
   const robotId = useRobotStore((s) => s.id)
@@ -54,11 +60,44 @@ export function MapLive({ currentSnapshotId = null, annotations = [], onAnnotati
   const [pending, setPending] = useState<PendingAnnotation | null>(null)
   const [pendingLabel, setPendingLabel] = useState('')
 
+  // --- zoom / pan ---
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  // drag en cours : on garde l'origine + on note si on a bouge (pour distinguer
+  // un pan d'un clic d'annotation).
+  const drag = useRef<{ x: number; y: number; panX: number; panY: number; moved: boolean } | null>(null)
+
+  const resetView = useCallback((): void => {
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+  }, [])
+  const zoomBy = useCallback((factor: number): void => {
+    setZoom((z) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * factor)))
+  }, [])
+
+  // pas de zoom a la molette (UX : ca interferait avec le scroll de la page) —
+  // le zoom se fait UNIQUEMENT avec les boutons +/-.
+  const onPointerDown = useCallback((e: React.PointerEvent): void => {
+    drag.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y, moved: false }
+  }, [pan.x, pan.y])
+  const onPointerMove = useCallback((e: React.PointerEvent): void => {
+    const d = drag.current
+    if (!d) return
+    const dx = e.clientX - d.x
+    const dy = e.clientY - d.y
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) d.moved = true
+    setPan({ x: d.panX + dx, y: d.panY + dy })
+  }, [])
+  const onPointerUp = useCallback((): void => {
+    drag.current = null
+  }, [])
+
   // CSS fullscreen (au lieu de Fullscreen API) — comme ca les siblings
   // fixed (CameraView, ArmViewer, MiniMapPip) restent visibles dans le DOM.
   const toggleFullscreen = useCallback((): void => {
     setFullscreen((f) => !f)
-  }, [])
+    resetView()
+  }, [resetView])
 
   // Echap pour sortir du plein ecran (cohherent avec Fullscreen API natif)
   useEffect(() => {
@@ -194,15 +233,16 @@ export function MapLive({ currentSnapshotId = null, annotations = [], onAnnotati
     }
   }, [mapMeta, scan, plan, frontiers, trail, robotPose, layers, annotations])
 
-  // clic sur la carte pour creer une annotation (si snapshot disponible)
-  const onCanvasClick = useCallback((e: React.MouseEvent<HTMLDivElement>): void => {
+  // clic sur la carte pour creer une annotation (si snapshot dispo ET qu'on n'a
+  // pas drague = pan). getBoundingClientRect tient compte du transform zoom/pan.
+  const onMapClick = useCallback((e: React.MouseEvent<HTMLDivElement>): void => {
+    if (drag.current?.moved) return
     if (!currentSnapshotId || !mapMeta) return
     const img = (e.currentTarget.querySelector('img') as HTMLImageElement | null)
     if (!img) return
     const rect = img.getBoundingClientRect()
     const xRatio = (e.clientX - rect.left) / rect.width
     const yRatio = (e.clientY - rect.top) / rect.height
-    // l'img est rendue redimensionnee — on remappe sur les coords natives
     const pxX = xRatio * mapMeta.width
     const pxY = yRatio * mapMeta.height
     const world = pixelToWorld(mapMeta, pxX, pxY)
@@ -228,17 +268,20 @@ export function MapLive({ currentSnapshotId = null, annotations = [], onAnnotati
     }
   }, [pending, pendingLabel, currentSnapshotId, onAnnotationCreated])
 
+  // hauteur de la zone carte : grande par defaut, plein ecran sinon.
+  const viewportClass = fullscreen ? 'h-screen w-screen' : 'h-[68vh] w-full'
+  // l'image upscale pour remplir la hauteur (petite carte PGM -> grande), nets.
+  const imgSizeClass = fullscreen ? 'h-[92vh] w-auto' : 'h-[64vh] w-auto'
+
   return (
     <div
       ref={containerRef}
       className={`bg-black border border-gray-900 rounded ${
-        fullscreen
-          ? 'fixed inset-0 z-40 flex items-center justify-center'
-          : 'relative'
+        fullscreen ? 'fixed inset-0 z-40' : 'relative'
       }`}
     >
       {/* boutons en haut a droite */}
-      <div className="absolute top-2 right-2 z-10 flex gap-2">
+      <div className="absolute top-2 right-2 z-20 flex gap-2">
         <div className="relative">
           <button
             onClick={() => setShowLayerMenu((v) => !v)}
@@ -271,74 +314,111 @@ export function MapLive({ currentSnapshotId = null, annotations = [], onAnnotati
         </button>
       </div>
 
-      <div
-        className={`relative inline-block ${currentSnapshotId ? 'cursor-crosshair' : ''}`}
-        onClick={onCanvasClick}
-      >
-        {mapPngUrl ? (
-          <>
-            <img
-              src={mapPngUrl}
-              alt="Carte SLAM"
-              className={fullscreen ? 'max-h-screen max-w-screen' : 'max-w-full max-h-[600px]'}
-              style={{ imageRendering: 'pixelated', display: 'block' }}
-            />
-            <GhostLayer
-              robotId={robotId}
-              enabled={layers.ghost}
-              width={mapMeta?.width ?? 0}
-              height={mapMeta?.height ?? 0}
-            />
-            <canvas
-              ref={canvasRef}
-              className="absolute inset-0 w-full h-full pointer-events-none"
-              style={{ imageRendering: 'pixelated' }}
-            />
-            {pending && (
-              <div
-                className="absolute z-20 bg-gray-900 border border-gray-700 rounded p-2 shadow-xl"
-                style={{
-                  left: `${(pending.pxX / (mapMeta?.width ?? 1)) * 100}%`,
-                  top: `${(pending.pxY / (mapMeta?.height ?? 1)) * 100}%`,
-                  transform: 'translate(8px, 8px)',
-                }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="flex items-center gap-2">
-                  <MapPinIcon className="w-3 h-3 text-blue-400" />
-                  <input
-                    autoFocus
-                    value={pendingLabel}
-                    onChange={(e) => setPendingLabel(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') void submitAnnotation()
-                      if (e.key === 'Escape') setPending(null)
-                    }}
-                    placeholder="label"
-                    className="bg-black border border-gray-700 rounded px-2 py-0.5 text-xs text-white w-32"
-                  />
-                  <button
-                    onClick={() => void submitAnnotation()}
-                    className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-0.5 rounded"
-                  >
-                    OK
-                  </button>
-                  <button
-                    onClick={() => setPending(null)}
-                    className="text-xs text-gray-400 hover:text-white px-1"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="text-gray-600 text-sm py-24 px-12">
-            Aucune carte disponible — demarre une session
-          </div>
-        )}
+      {/* controles zoom en bas a droite */}
+      <div className="absolute bottom-2 right-2 z-20 flex flex-col gap-1.5">
+        <button onClick={() => zoomBy(1.3)} aria-label="Zoom avant"
+          className="bg-gray-900/80 hover:bg-gray-800 text-gray-200 p-2 rounded border border-gray-700">
+          <ZoomIn className="w-4 h-4" />
+        </button>
+        <button onClick={() => zoomBy(1 / 1.3)} aria-label="Zoom arriere"
+          className="bg-gray-900/80 hover:bg-gray-800 text-gray-200 p-2 rounded border border-gray-700">
+          <ZoomOut className="w-4 h-4" />
+        </button>
+        <button onClick={resetView} aria-label="Recadrer"
+          className="bg-gray-900/80 hover:bg-gray-800 text-gray-200 p-2 rounded border border-gray-700">
+          <Crosshair className="w-4 h-4" />
+        </button>
+        <span className="text-[10px] text-center text-gray-400 select-none">{Math.round(zoom * 100)}%</span>
       </div>
+
+      {mapPngUrl ? (
+        // viewport : capture molette + drag pour zoom/pan. overflow-hidden pour
+        // que la carte agrandie ne deborde pas hors du cadre.
+        <div
+          className={`overflow-hidden flex items-center justify-center ${viewportClass} ${
+            drag.current ? 'cursor-grabbing' : 'cursor-grab'
+          }`}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerLeave={onPointerUp}
+        >
+          {/* wrapper transforme (zoom + pan) ; le groupe img+canvas garde son
+              alignement interne (canvas en inset-0 sur l'img). */}
+          <div
+            style={{
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transformOrigin: 'center center',
+            }}
+          >
+            <div
+              className={`relative inline-block ${currentSnapshotId ? 'cursor-crosshair' : ''}`}
+              onClick={onMapClick}
+            >
+              <img
+                src={mapPngUrl}
+                alt="Carte SLAM"
+                draggable={false}
+                className={imgSizeClass}
+                style={{ imageRendering: 'pixelated', display: 'block' }}
+              />
+              <GhostLayer
+                robotId={robotId}
+                enabled={layers.ghost}
+                width={mapMeta?.width ?? 0}
+                height={mapMeta?.height ?? 0}
+              />
+              <canvas
+                ref={canvasRef}
+                className="absolute inset-0 w-full h-full pointer-events-none"
+                style={{ imageRendering: 'pixelated' }}
+              />
+              {pending && (
+                <div
+                  className="absolute z-20 bg-gray-900 border border-gray-700 rounded p-2 shadow-xl"
+                  style={{
+                    left: `${(pending.pxX / (mapMeta?.width ?? 1)) * 100}%`,
+                    top: `${(pending.pxY / (mapMeta?.height ?? 1)) * 100}%`,
+                    transform: 'translate(8px, 8px)',
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center gap-2">
+                    <MapPinIcon className="w-3 h-3 text-blue-400" />
+                    <input
+                      autoFocus
+                      value={pendingLabel}
+                      onChange={(e) => setPendingLabel(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') void submitAnnotation()
+                        if (e.key === 'Escape') setPending(null)
+                      }}
+                      placeholder="label"
+                      className="bg-black border border-gray-700 rounded px-2 py-0.5 text-xs text-white w-32"
+                    />
+                    <button
+                      onClick={() => void submitAnnotation()}
+                      className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-0.5 rounded"
+                    >
+                      OK
+                    </button>
+                    <button
+                      onClick={() => setPending(null)}
+                      className="text-xs text-gray-400 hover:text-white px-1"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="text-gray-600 text-sm py-24 px-12 text-center">
+          Aucune carte disponible — demarre une session
+        </div>
+      )}
     </div>
   )
 }

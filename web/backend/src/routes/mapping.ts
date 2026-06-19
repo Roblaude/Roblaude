@@ -3,6 +3,7 @@ import {
   startMapping,
   stopMapping,
   saveMapping,
+  localizeMapping,
   listSessions,
   getSession,
   downloadSnapshot,
@@ -18,6 +19,7 @@ const router = Router()
 router.post('/start', startMapping)
 router.post('/stop', stopMapping)
 router.post('/save', saveMapping)
+router.post('/localize', localizeMapping)
 router.get('/sessions', listSessions)
 router.get('/sessions/:id', getSession)
 router.get('/snapshots/:id/download.:ext', downloadSnapshot)

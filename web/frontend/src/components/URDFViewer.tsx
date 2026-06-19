@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import URDFLoader from 'urdf-loader'
-import { Bot, Maximize2, Minimize2, X, AlertTriangle } from 'lucide-react'
+import { Bot, Maximize2, Minimize2, X, Minus, AlertTriangle } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { useMappingStore } from '@/stores/mappingStore'
 import { armPoseToUrdfJoints } from '@/lib/armUrdf'
+import { useDraggable } from '@/hooks/useDraggable'
 
 // Viewer 3D fidele du bras Yahboom M3 Pro via urdf-loader.
 // Charge l'URDF reel servi par le backend (/robot_assets/m3pro.urdf.xml)
 // et applique les /joint_states recus via WS pour animer.
+// Panneau flottant DEPLACABLE (drag entete) + reductible + fermable.
 //
 // Si l'URDF n'est pas dispo (pas encore fetch via fetch_urdf_from_robot.sh),
 // affiche un message explicite — surtout pas un faux bras anime.
@@ -16,13 +18,14 @@ import { armPoseToUrdfJoints } from '@/lib/armUrdf'
 interface Props {
   robotId: number
   enabled?: boolean
+  onClose?: () => void
 }
 
 interface JointMap {
   [name: string]: { setJointValue: (v: number) => void }
 }
 
-export function URDFViewer({ robotId, enabled = true }: Props) {
+export function URDFViewer({ robotId, enabled = true, onClose }: Props) {
   const token = useAuthStore((s) => s.token)
   const armPose = useMappingStore((s) => s.armPose)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -36,7 +39,9 @@ export function URDFViewer({ robotId, enabled = true }: Props) {
   const [status, setStatus] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [hidden, setHidden] = useState(false)
+  const [minimized, setMinimized] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
+  const { pos, onDragStart } = useDraggable({ x: window.innerWidth - 288, y: window.innerHeight - 290 })
 
   useEffect(() => {
     const container = containerRef.current
@@ -101,6 +106,7 @@ export function URDFViewer({ robotId, enabled = true }: Props) {
       if (!container) return
       const w = container.clientWidth
       const h = container.clientHeight
+      if (w === 0 || h === 0) return
       camera.aspect = w / h
       camera.updateProjectionMatrix()
       renderer.setSize(w, h)
@@ -189,10 +195,14 @@ export function URDFViewer({ robotId, enabled = true }: Props) {
   return (
     <div
       className={`bg-black border border-gray-700 rounded shadow-lg overflow-hidden z-30 ${
-        fullscreen ? 'fixed inset-0' : 'fixed bottom-32 right-4 w-64'
+        fullscreen ? 'fixed inset-0' : 'fixed w-64'
       }`}
+      style={fullscreen ? undefined : { left: pos.x, top: pos.y }}
     >
-      <div className="flex items-center justify-between bg-gray-900 px-2 py-1 border-b border-gray-800">
+      <div
+        onPointerDown={onDragStart}
+        className="flex items-center justify-between bg-gray-900 px-2 py-1 border-b border-gray-800 cursor-move select-none"
+      >
         <div className="flex items-center gap-1.5 text-xs text-gray-300">
           <Bot className="w-3 h-3" /> Bras 3D (URDF)
           <span className={`text-[10px] ${
@@ -204,32 +214,42 @@ export function URDFViewer({ robotId, enabled = true }: Props) {
           </span>
         </div>
         <div className="flex items-center gap-1">
+          <button onClick={() => setMinimized((m) => !m)} className="text-gray-400 hover:text-white p-0.5" aria-label="Reduire">
+            <Minus className="w-3 h-3" />
+          </button>
           <button onClick={toggleFs} className="text-gray-400 hover:text-white p-0.5" aria-label="plein ecran">
             {fullscreen ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
           </button>
-          <button onClick={() => setHidden(true)} className="text-gray-400 hover:text-white p-0.5" aria-label="cacher">
+          <button onClick={() => (onClose ? onClose() : setHidden(true))} className="text-gray-400 hover:text-white p-0.5" aria-label="fermer">
             <X className="w-3 h-3" />
           </button>
         </div>
       </div>
-      <div ref={containerRef} className={fullscreen ? 'h-screen w-screen' : 'aspect-video w-full'} />
-      {status === 'missing' && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-center p-3">
-          <div className="text-xs text-gray-300">
-            <AlertTriangle className="w-5 h-5 text-yellow-500 mx-auto mb-1.5" />
-            URDF non récupéré.<br />
-            Lance <code className="text-cyan-400">./robot/scripts/fetch_urdf_from_robot.sh</code>
+      {/* le canvas THREE reste monte (cache en CSS quand reduit) pour ne pas
+          recreer la scene a chaque toggle. */}
+      <div className="relative">
+        <div
+          ref={containerRef}
+          className={`${minimized ? 'hidden' : ''} ${fullscreen ? 'h-screen w-screen' : 'aspect-video w-full'}`}
+        />
+        {!minimized && status === 'missing' && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-center p-3">
+            <div className="text-xs text-gray-300">
+              <AlertTriangle className="w-5 h-5 text-yellow-500 mx-auto mb-1.5" />
+              URDF non récupéré.<br />
+              Lance <code className="text-cyan-400">./robot/scripts/fetch_urdf_from_robot.sh</code>
+            </div>
           </div>
-        </div>
-      )}
-      {status === 'error' && errorMsg && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-center p-3">
-          <div className="text-xs text-red-400">
-            <AlertTriangle className="w-5 h-5 mx-auto mb-1.5" />
-            Erreur URDF :<br />{errorMsg}
+        )}
+        {!minimized && status === 'error' && errorMsg && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-center p-3">
+            <div className="text-xs text-red-400">
+              <AlertTriangle className="w-5 h-5 mx-auto mb-1.5" />
+              Erreur URDF :<br />{errorMsg}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }

@@ -110,10 +110,11 @@ export function RobotRepairPage() {
 
   const repair = async (action: RepairAction): Promise<void> => {
     if (action === 'reboot' && !window.confirm('Redémarrer complètement le Jetson ? (~90s d\'indisponibilité)')) return
+    if (action === 'shutdown' && !window.confirm('Éteindre le robot proprement ? (range le bras puis coupe — il faudra le rallumer physiquement)')) return
     setBusy(action)
     push('info', `🔧 ${REPAIR_LABELS[action]} lancé...`)
     try {
-      const r = await runRepair(robotId, action, action === 'reboot')
+      const r = await runRepair(robotId, action, action === 'reboot' || action === 'shutdown')
       if (r.ok) { push('ok', `${REPAIR_LABELS[action]} : OK${r.note ? ` (${r.note})` : ''}`); toast.success(REPAIR_LABELS[action]) }
       else { push('warn', `${REPAIR_LABELS[action]} : code ${r.code}`); toast.warning(`${REPAIR_LABELS[action]} (code ${r.code})`) }
     } catch (e) {
@@ -207,12 +208,12 @@ export function RobotRepairPage() {
 
       {/* actions globales */}
       <div className="flex flex-wrap gap-2">
-        {(['reconnect_stm32', 'restart_ros', 'resync_clock', 'reboot'] as RepairAction[]).map((a) => (
+        {(['reconnect_stm32', 'restart_ros', 'resync_clock', 'reboot', 'shutdown'] as RepairAction[]).map((a) => (
           <button
             key={a}
             onClick={() => repair(a)}
             disabled={busy !== null}
-            className={`rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50 ${a === 'reboot' ? 'border-destructive/40 text-destructive' : 'border-border'}`}
+            className={`rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50 ${a === 'reboot' || a === 'shutdown' ? 'border-destructive/40 text-destructive' : 'border-border'}`}
           >
             {busy === a ? '…' : REPAIR_LABELS[a]}
           </button>

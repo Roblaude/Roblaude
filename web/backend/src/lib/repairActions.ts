@@ -2,13 +2,14 @@
 // NOM d'action (pas une commande shell), le backend mappe vers une commande SSH
 // fixe. Surface fermee -> pas d'injection possible.
 
-export type RepairAction = 'reconnect_stm32' | 'restart_ros' | 'resync_clock' | 'reboot'
+export type RepairAction = 'reconnect_stm32' | 'restart_ros' | 'resync_clock' | 'reboot' | 'shutdown'
 
 export const REPAIR_ACTIONS: readonly RepairAction[] = [
   'reconnect_stm32',
   'restart_ros',
   'resync_clock',
   'reboot',
+  'shutdown',
 ]
 
 export const REPAIR_LABELS: Record<RepairAction, string> = {
@@ -16,6 +17,7 @@ export const REPAIR_LABELS: Record<RepairAction, string> = {
   restart_ros: 'Redémarrage stack ROS',
   resync_clock: 'Resync horloge',
   reboot: 'Redémarrage Jetson',
+  shutdown: 'Extinction propre',
 }
 
 export function isRepairAction(x: unknown): x is RepairAction {
@@ -35,5 +37,8 @@ export function repairCommand(action: RepairAction, nowUtc?: string): string {
       return `sudo date -u -s "${nowUtc ?? ''}"`
     case 'reboot':
       return 'sudo reboot'
+    case 'shutdown':
+      // docker stop -> le trap de container_autostart range le bras avant la coupure, puis extinction
+      return 'docker stop -t 6 m3pro; sudo shutdown -h now'
   }
 }

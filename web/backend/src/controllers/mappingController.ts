@@ -13,6 +13,7 @@ import { saveSnapshotFiles, getSnapshotPath } from '../lib/mapStorage'
 const startSchema = z.object({ robotId: z.number().int().positive() })
 const stopSchema = z.object({ sessionId: z.number().int().positive() })
 const saveSchema = z.object({ sessionId: z.number().int().positive(), name: z.string().optional() })
+const localizeSchema = z.object({ robotId: z.number().int().positive(), map: z.string().optional() })
 
 const SAVE_TIMEOUT_MS = 30_000
 
@@ -39,6 +40,17 @@ export async function stopMapping(req: Request, res: Response): Promise<void> {
   if (!session) { res.status(404).json({ error: 'session not found' }); return }
   robotMqtt.publishCommand(session.robotId, 'mapping/stop', { sessionId: session.id })
   res.status(200).json({ ok: true })
+}
+
+// Bascule le robot en mode LOCALISATION (amcl sur carte figee, ne modifie pas
+// la carte). Le mapping_supervisor lance localization.launch.py.
+export async function localizeMapping(req: Request, res: Response): Promise<void> {
+  const parsed = localizeSchema.safeParse(req.body)
+  if (!parsed.success) { res.status(400).json({ error: 'invalid body' }); return }
+  const userId = req.user?.userId
+  if (!userId) { res.status(401).json({ error: 'auth required' }); return }
+  robotMqtt.publishCommand(parsed.data.robotId, 'mapping/localize', { map: parsed.data.map })
+  res.status(200).json({ ok: true, mode: 'localization' })
 }
 
 export async function saveMapping(req: Request, res: Response): Promise<void> {

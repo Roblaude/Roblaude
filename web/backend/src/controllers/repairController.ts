@@ -36,7 +36,9 @@ export async function getHealth(req: Request, res: Response): Promise<void> {
   let probe: RobotStatusJson | null = null
   let reachable = true
   try {
-    const r = await runOnce(robotId, STATUS_CMD, 12_000)
+    // 20s : le 1er appel a froid declenche la decouverte DDS (ros2 node list)
+    // qui peut prendre ~15s ; les suivants sont chauds et rapides.
+    const r = await runOnce(robotId, STATUS_CMD, 20_000)
     probe = JSON.parse(r.stdout.trim()) as RobotStatusJson
   } catch {
     reachable = false
@@ -72,9 +74,9 @@ export async function runRepair(req: Request, res: Response): Promise<void> {
     return
   }
   const action = parsed.data.action as RepairAction
-  // le reboot coupe tout -> on exige une confirmation explicite
-  if (action === 'reboot' && parsed.data.confirm !== true) {
-    res.status(400).json({ error: 'reboot requires confirm:true' })
+  // reboot et shutdown coupent tout -> confirmation explicite obligatoire
+  if ((action === 'reboot' || action === 'shutdown') && parsed.data.confirm !== true) {
+    res.status(400).json({ error: `${action} requires confirm:true` })
     return
   }
 
@@ -84,7 +86,9 @@ export async function runRepair(req: Request, res: Response): Promise<void> {
   const startedAt = Date.now()
 
   try {
-    const result = await runOnce(robotId, command, action === 'reboot' ? 5_000 : 20_000)
+    // shutdown laisse le temps au docker stop (range le bras) avant la coupure
+    const timeout = action === 'reboot' ? 5_000 : action === 'shutdown' ? 12_000 : 20_000
+    const result = await runOnce(robotId, command, timeout)
     const durationMs = Date.now() - startedAt
     await prisma.sshAuditLog
       .create({ data: { robotId, userId, mode: 'ALLOWLIST', command, exitCode: result.code, durationMs } })
@@ -95,9 +99,9 @@ export async function runRepair(req: Request, res: Response): Promise<void> {
     await prisma.sshAuditLog
       .create({ data: { robotId, userId, mode: 'ALLOWLIST', command, exitCode: -1, durationMs } })
       .catch(() => {})
-    // le reboot coupe la connexion SSH : c'est attendu, on considere l'action lancee
-    if (action === 'reboot') {
-      res.json({ ok: true, action, command, note: 'reboot lancé (connexion coupée)' })
+    // reboot/shutdown coupent la connexion SSH : attendu, on considere l'action lancee
+    if (action === 'reboot' || action === 'shutdown') {
+      res.json({ ok: true, action, command, note: `${action} lancé (connexion coupée)` })
       return
     }
     res.status(502).json({ error: 'ssh failure', action, message: err instanceof Error ? err.message : 'ssh error' })

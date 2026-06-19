@@ -93,6 +93,7 @@ export type CmdAction =
   | 'mapping/start'
   | 'mapping/stop'
   | 'mapping/save'
+  | 'mapping/localize'
   | 'teleop'
   | 'arm'
 

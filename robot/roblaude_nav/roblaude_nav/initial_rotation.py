@@ -7,7 +7,7 @@ tourner le robot sur lui-meme, on permet a SLAM d'accumuler des scans depuis
 le meme point sous tous les angles -> /map plus precise -> explore_lite voit
 des frontieres -> auto-exploration peut demarrer.
 
-Publie sur /cmd_vel une rotation a 0.3 rad/s pendant ~22 s (= 2*pi/0.3).
+Publie sur /cmd_vel une rotation moderee pendant ~22 s.
 Puis envoie Twist zero et exit. A lancer UNE FOIS au demarrage de la stack
 exploration (cf. roblaude_nav/launch/explore.launch.py).
 """
@@ -20,7 +20,7 @@ from rclpy.node import Node
 
 
 # Vitesse de rotation moderee — laisse a SLAM le temps d'integrer chaque scan
-ANGULAR_SPEED_RAD_S = 0.4
+ANGULAR_SPEED_RAD_S = 0.3
 ROTATION_DURATION_S = 2 * math.pi / ANGULAR_SPEED_RAD_S + 1.0  # 360° + marge
 
 

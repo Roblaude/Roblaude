@@ -20,6 +20,7 @@ YAHBOOM_WS="${YAHBOOM_WS:-/root/yahboomcar_ws}"
 M3PRO_WS="${M3PRO_WS:-/root/M3Pro_ws}"
 MAPS_DIR="${MAPS_DIR:-/root/maps}"
 BROKER_IP_FILE="${BROKER_IP_FILE:-/etc/roblaude/broker_ip}"
+ROBLAUDE_MODE="${ROBLAUDE_MODE:-minimal}"
 
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-30}"
 export FASTDDS_BUILTIN_TRANSPORTS="${FASTDDS_BUILTIN_TRANSPORTS:-UDPv4}"
@@ -71,6 +72,7 @@ if [ -r "$BROKER_IP_FILE" ]; then
     fi
 fi
 echo "[autostart] broker MQTT cible : $BROKER_HOST"
+echo "[autostart] mode : $ROBLAUDE_MODE"
 
 # --- Helper spawn : nouveau process group + log dedie ---
 spawn_once() {
@@ -113,33 +115,55 @@ else
 fi
 sleep 2
 
-# --- 5) Camera RGB-D Orbbec DaBai DCW2 (couleur rgb8 + depth, meme driver) ---
-# Le driver publie /camera/color/image_raw (+compressed lu par le bridge -> front)
-# et /camera/depth/image_raw. Au boot, l'USB est enumere a frais : le device
-# repond (contrairement a un (re)lancement a chaud sur device deja occupe).
-if [ -f "$ROBLAUDE_WS/install/roblaude_nav/share/roblaude_nav/launch/camera.launch.py" ]; then
-    spawn_once camera ros2 launch roblaude_nav camera.launch.py
-else
-    echo "[autostart] camera.launch.py pas encore build, camera non lancee"
-fi
-sleep 5   # laisse la camera (USB + 1ers frames) s'initialiser avant le detector qui la consomme
-
-# --- 6) Detecteur objet UC-02 (HSV+depth -> /roblaude/detections) ---
-# Consomme par mission_executor sur PICK_AND_PLACE. Always-on (decision C).
-if [ -f "$ROBLAUDE_WS/install/roblaude_pickplace/share/roblaude_pickplace/launch/pickplace.launch.py" ]; then
-    spawn_once detector ros2 launch roblaude_pickplace pickplace.launch.py
-else
-    echo "[autostart] roblaude_pickplace pas encore build, detecteur non lance"
-fi
-
-# --- 7) Bras en position connue (HOME) au demarrage ---
-# Pas de feedback servo : le bras peut etre dans n'importe quelle pose au boot.
-# On l'amene a HOME des que YB_Node repond, pour partir d'un etat connu.
-# Pose HOME officielle Yahboom M3 Pro : [90,120,10,20,90,0] (cf. ARM_PRESETS backend).
-ARM_HOME='{joint1: 90, joint2: 120, joint3: 10, joint4: 20, joint5: 90, joint6: 0, time: 2000}'
+# --- 5) Perception lourde uniquement en mode full ---
+# Le boot minimal garde l'USB stable pour diagnostiquer STM32/base. La camera
+# Orbbec + detector consomment le meme sous-hub que CP2104/CH340 et ont deja
+# provoque des deconnexions au boot. Pour la demo statique, lancer en full ou
+# demarrer camera/detector manuellement apres stabilisation.
 ARM_STOW='{joint1: 90, joint2: 120, joint3: 10, joint4: 20, joint5: 90, joint6: 0, time: 1500}'
-( sleep 8; ros2 topic pub --once /arm6_joints arm_msgs/msg/ArmJoints "$ARM_HOME" ) \
-    >/tmp/roslogs/arm_home.log 2>&1 &
+ARM_HOME='{joint1: 90, joint2: 120, joint3: 10, joint4: 20, joint5: 90, joint6: 0, time: 2000}'
+
+# Met le bras en HOME UNE SEULE FOIS, des que YB_Node (STM32) repond. Jamais de
+# rafale (YB_Node crashe sous charge). Tourne en arriere-plan, ne bloque pas le boot.
+arm_home_when_ready() {
+  (
+    for i in $(seq 1 30); do
+      if ros2 node list 2>/dev/null | grep -q YB_Node; then
+        sleep 3   # petite marge apres l'apparition du node
+        ros2 topic pub --once /arm6_joints arm_msgs/msg/ArmJoints "$ARM_HOME"
+        echo "[arm_home] HOME envoye (YB_Node pret)"
+        exit 0
+      fi
+      sleep 2
+    done
+    echo "[arm_home] YB_Node jamais apparu en ~60s, HOME non envoye"
+  ) >/tmp/roslogs/arm_home.log 2>&1 &
+}
+
+if [ "$ROBLAUDE_MODE" = "full" ]; then
+    # Camera RGB-D Orbbec DaBai DCW2 (couleur rgb8 + depth, meme driver).
+    if [ -f "$ROBLAUDE_WS/install/roblaude_nav/share/roblaude_nav/launch/camera.launch.py" ]; then
+        spawn_once camera ros2 launch roblaude_nav camera.launch.py
+    else
+        echo "[autostart] camera.launch.py pas encore build, camera non lancee"
+    fi
+    sleep 5
+
+    # Detecteur objet UC-02 (HSV+depth -> /roblaude/detections).
+    if [ -f "$ROBLAUDE_WS/install/roblaude_pickplace/share/roblaude_pickplace/launch/pickplace.launch.py" ]; then
+        spawn_once detector ros2 launch roblaude_pickplace pickplace.launch.py
+    else
+        echo "[autostart] roblaude_pickplace pas encore build, detecteur non lance"
+    fi
+
+    # Bras en HOME au demarrage (apres YB_Node pret).
+    arm_home_when_ready
+else
+    echo "[autostart] mode minimal : camera/detector non lances au boot"
+    # Bras en HOME au boot meme en minimal (demande explicite) : YB_Node frais +
+    # pas de charge = le bon moment pour partir d'une pose connue.
+    arm_home_when_ready
+fi
 
 echo "[autostart] tout lance. Logs : /tmp/roslogs/*.log"
 echo "[autostart] verif : ros2 topic list | head"

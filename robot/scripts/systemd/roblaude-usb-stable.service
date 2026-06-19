@@ -1,0 +1,13 @@
+[Unit]
+Description=RobLaude USB stable mode (disable autosuspend)
+DefaultDependencies=no
+After=local-fs.target
+Before=docker.service micro-ros-agent.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/roblaude-usb-stable.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

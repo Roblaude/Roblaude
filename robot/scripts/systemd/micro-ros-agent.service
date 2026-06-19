@@ -1,8 +1,8 @@
 [Unit]
 Description=RobLaude micro-ROS Agent bridge STM32 -> ROS 2
 Requires=docker.service
-After=docker.service systemd-udev-settle.service
-Wants=network-online.target systemd-udev-settle.service
+After=roblaude-usb-stable.service docker.service systemd-udev-settle.service
+Wants=network-online.target systemd-udev-settle.service roblaude-usb-stable.service
 
 [Service]
 Type=simple

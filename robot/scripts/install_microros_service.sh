@@ -14,6 +14,7 @@ set -e
 SRC="$(cd "$(dirname "$0")" && pwd)"
 
 echo "━━━ 1/4 : helpers dans /usr/local/bin ━━━"
+sudo install -m 0755 "$SRC/roblaude-usb-stable.sh"         /usr/local/bin/roblaude-usb-stable.sh
 sudo install -m 0755 "$SRC/roblaude-link-stm32.sh"        /usr/local/bin/roblaude-link-stm32.sh
 sudo install -m 0755 "$SRC/roblaude-stm32-healthcheck.sh" /usr/local/bin/roblaude-stm32-healthcheck.sh
 sudo install -m 0755 "$SRC/roblaude-robot-status.sh"      /usr/local/bin/roblaude-robot-status.sh
@@ -25,14 +26,20 @@ echo "━━━ 2/4 : units systemd ━━━"
 sudo install -m 0644 "$SRC/systemd/micro-ros-agent.service"            /etc/systemd/system/micro-ros-agent.service
 sudo install -m 0644 "$SRC/systemd/roblaude-stm32-healthcheck.service" /etc/systemd/system/roblaude-stm32-healthcheck.service
 sudo install -m 0644 "$SRC/systemd/roblaude-stm32-healthcheck.timer"   /etc/systemd/system/roblaude-stm32-healthcheck.timer
+sudo install -m 0644 "$SRC/systemd/roblaude-usb-stable.service"        /etc/systemd/system/roblaude-usb-stable.service
+sudo install -m 0644 "$SRC/systemd/roblaude-m3pro.service"             /etc/systemd/system/roblaude-m3pro.service
 
 echo "━━━ 3/4 : on coupe l'ancien autostart GUI fragile (si present) ━━━"
 GUI=/home/jetson/.config/autostart/start.desktop
 [ -f "$GUI" ] && mv "$GUI" "$GUI.disabled-by-roblaude-systemd" && echo "   start.desktop desactive"
+GUI=/home/jetson/.config/autostart/uros.desktop
+[ -f "$GUI" ] && mv "$GUI" "$GUI.disabled-by-roblaude-systemd" && echo "   uros.desktop desactive"
 
 echo "━━━ 4/4 : (re)demarrage des services ━━━"
 sudo systemctl daemon-reload
+sudo systemctl enable --now roblaude-usb-stable.service
 sudo systemctl enable --now micro-ros-agent.service
+sudo systemctl enable roblaude-m3pro.service
 sudo systemctl enable --now roblaude-stm32-healthcheck.timer
 sleep 10
 

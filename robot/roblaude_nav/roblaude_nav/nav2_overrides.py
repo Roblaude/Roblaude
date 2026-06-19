@@ -66,9 +66,29 @@ def apply_overrides(params):
     _patch_scan_layer(local_cm, 'obstacle_layer')
     _patch_scan_layer(local_cm, 'voxel_layer')
 
+    # Rythme un peu reduit pour Jetson Nano. On baisse d'environ 25 % les
+    # boucles critiques au lieu de brider fortement le robot.
+    bt = params.get('bt_navigator', {}).get('ros__parameters', {})
+    bt['bt_loop_duration'] = 13
+    bt['default_server_timeout'] = 2000
+
+    planner_server = params.get('planner_server', {}).get('ros__parameters', {})
+    planner_server['expected_planner_frequency'] = 15.0
+
+    behavior = params.get('behavior_server', {}).get('ros__parameters', {})
+    behavior['cycle_frequency'] = 7.5
+
+    smoother = params.get('velocity_smoother', {}).get('ros__parameters', {})
+    smoother['smoothing_frequency'] = 15.0
+
+    global_cm['update_frequency'] = 0.75
+    global_cm['publish_frequency'] = 0.75
+    local_cm['update_frequency'] = 3.75
+    local_cm['publish_frequency'] = 1.5
+
     # controller : lent + tolerant pour les 1ers goals.
     controller = params['controller_server']['ros__parameters']
-    controller['controller_frequency'] = 10.0
+    controller['controller_frequency'] = 7.5
 
     pc_name = controller.get('progress_checker_plugin', 'progress_checker')
     if pc_name in controller:
@@ -83,13 +103,13 @@ def apply_overrides(params):
 
     follow = controller.get('FollowPath')
     if follow:
-        follow['max_vel_x'] = 0.12
-        follow['max_speed_xy'] = 0.12
-        follow['max_vel_theta'] = 0.45
-        follow['acc_lim_x'] = 0.5
-        follow['decel_lim_x'] = -0.5
-        follow['acc_lim_theta'] = 1.0
-        follow['decel_lim_theta'] = -1.0
+        follow['max_vel_x'] = 0.09
+        follow['max_speed_xy'] = 0.09
+        follow['max_vel_theta'] = 0.34
+        follow['acc_lim_x'] = 0.38
+        follow['decel_lim_x'] = -0.38
+        follow['acc_lim_theta'] = 0.75
+        follow['decel_lim_theta'] = -0.75
         follow['transform_tolerance'] = 1.0
 
     # planner : tolerance 1.0m -> evite "GridBased failed to create plan with tolerance 0.50".

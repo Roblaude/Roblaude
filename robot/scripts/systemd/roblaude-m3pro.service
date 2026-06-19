@@ -1,0 +1,17 @@
+[Unit]
+Description=RobLaude ROS container m3pro
+Requires=docker.service
+After=docker.service micro-ros-agent.service
+Wants=micro-ros-agent.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=ROBLAUDE_MODE=minimal
+ExecStart=/home/jetson/Docker_M3Pro_Joy.sh
+ExecStop=/usr/bin/docker stop -t 10 m3pro
+TimeoutStartSec=180
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

@@ -3,6 +3,7 @@
 # But : detecter tot une regression (agent sur le mauvais port, session morte)
 # capturer le diag pour ne plus rediagnostiquer de zero, puis relink + restart.
 set -u
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 SVC=micro-ros-agent.service
 # Tourne en root (oneshot systemd) : on garde le diag dans un dossier root-owned,
 # pas dans /home/jetson (sinon un compte jetson compromis pourrait piéger le chemin
@@ -24,14 +25,29 @@ if [ -z "$reason" ]; then
   for d in /dev/serial/by-id/*Silicon_Labs* /dev/serial/by-id/*CP210*; do
     [ -e "$d" ] && cp=$(readlink -f "$d") && break
   done
-  [ -n "$cp" ] && [ "$tgt" != "$cp" ] && reason="myserial->$tgt mais STM32(CP210x)=$cp"
+  [ -z "$cp" ] && reason="STM32 CP210x absent de /dev/serial/by-id"
+  [ -z "$reason" ] && [ "$tgt" != "$cp" ] && reason="myserial->$tgt mais STM32(CP210x)=$cp"
 fi
 
-# 3. YB_Node present dans le graphe ROS ? (best-effort)
+# 3. L'agent peut rester "active" apres disparition du port : lire son log.
+if [ -z "$reason" ]; then
+  docker logs --tail 20 micro_ros_agent 2>&1 | grep -q 'Serial port not found' \
+    && reason="micro_ros_agent actif mais /dev/myserial absent"
+fi
+
+# 4. Preuve de vie STM32 : un message frais, pas un node zombie.
+if [ -z "$reason" ]; then
+  docker ps --format '{{.Names}}' | grep -q '^m3pro$' || reason="container m3pro absent"
+fi
 if [ -z "$reason" ]; then
   docker exec -e ROS_DOMAIN_ID=30 -e FASTDDS_BUILTIN_TRANSPORTS=UDPv4 m3pro \
-    bash -lc 'source /opt/ros/humble/setup.bash; timeout 8 ros2 node list 2>/dev/null | grep -q YB_Node' \
-    || reason="YB_Node absent du graphe ROS"
+    bash -lc '
+      source /opt/ros/humble/setup.bash
+      source /root/yahboomcar_ws/install/setup.bash 2>/dev/null || true
+      source /root/roblaude_ws/install/setup.bash 2>/dev/null || true
+      timeout 5 ros2 topic echo /battery --once >/tmp/roblaude_battery_check 2>/dev/null ||
+      timeout 5 ros2 topic echo /odom_raw --once >/tmp/roblaude_odom_raw_check 2>/dev/null
+    ' || reason="aucun message frais /battery ou /odom_raw"
 fi
 
 [ -z "$reason" ] && { echo "OK"; exit 0; }
@@ -57,3 +73,4 @@ else
 fi
 # garde les 30 plus recents (noms horodates -> tri lexical = chronologique)
 find "$DIAGDIR" -maxdepth 1 -name 'incident_*.log' -type f | sort | head -n -30 | while read -r f; do rm -f -- "$f"; done
+exit 1

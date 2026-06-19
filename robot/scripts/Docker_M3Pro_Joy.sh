@@ -23,6 +23,7 @@ done
 
 # Autoriser X local pour le container
 xhost +local:root >/dev/null 2>&1 || true
+ROBLAUDE_MODE="${ROBLAUDE_MODE:-minimal}"
 
 # Repertoires hote persistants (jetson est owner, pas de sudo)
 mkdir -p /home/jetson/roblaude_ws/scripts
@@ -62,6 +63,7 @@ docker run -d \
   -e XDG_RUNTIME_DIR=/tmp/runtime-jetson \
   -e ROS_DOMAIN_ID=30 \
   -e FASTDDS_BUILTIN_TRANSPORTS=UDPv4 \
+  -e ROBLAUDE_MODE="${ROBLAUDE_MODE}" \
   -v /run/user/1000/pulse:/run/user/1000/pulse:ro \
   -v /home/jetson/.config/pulse:/root/.config/pulse:ro \
   -v /tmp/.X11-unix:/tmp/.X11-unix \

@@ -24,6 +24,7 @@ from std_msgs.msg import String
 
 from roblaude_pickplace.color import hex_to_hsv_ranges
 from roblaude_pickplace.detection import backproject, sample_depth_median
+from roblaude_pickplace.qr import build_qr_detections, qr_detections_to_json
 
 
 def decode_image(msg: Image):
@@ -71,6 +72,14 @@ class ObjectDetector(Node):
         self.min_depth = float(self.declare_parameter('min_detection_depth', 0.15).value)
         self.depth_scale = float(self.declare_parameter('depth_scale', 0.001).value)
 
+        # --- QR basse frequence : la camera tourne deja, le decodeur reste leger ---
+        self.enable_qr_detection = bool(
+            self.declare_parameter('enable_qr_detection', True).value)
+        self.qr_period_sec = float(self.declare_parameter('qr_period_sec', 0.5).value)
+        self.qr_detector = cv2.QRCodeDetector()
+        self.last_qr_at = 0.0
+        self.last_qr_detections = []
+
         # --- Intrinseques : valeurs de repli, ecrasees par camera_info ---
         self.fx = float(self.declare_parameter('camera_fx', 600.0).value)
         self.fy = float(self.declare_parameter('camera_fy', 600.0).value)
@@ -88,6 +97,7 @@ class ObjectDetector(Node):
         self.create_subscription(String, '/roblaude/target_color', self._on_color_cmd, 5)
 
         self.pose_pub = self.create_publisher(PoseArray, '/roblaude/detections', 10)
+        self.qr_pub = self.create_publisher(String, '/roblaude/qr_detections', 10)
         # image annotee pour le reglage HSV en vrai
         self.image_pub = self.create_publisher(Image, '/roblaude/detection_image', 5)
 
@@ -158,8 +168,41 @@ class ObjectDetector(Node):
             x3d, y3d, z3d = backproject(px, py, z, self.fx, self.fy, self.cx, self.cy)
             detections.append((x3d, y3d, z3d, px, py, int(radius)))
 
+        qr_detections = self.last_qr_detections
+        if self._should_run_qr():
+            frame = self.latest_color.header.frame_id or 'camera_color_optical_frame'
+            qr_detections = build_qr_detections(
+                color_img=color_img,
+                depth_img=depth_img,
+                detector=self.qr_detector,
+                depth_scale=self.depth_scale,
+                min_depth=self.min_depth,
+                max_depth=self.max_depth,
+                fx=self.fx,
+                fy=self.fy,
+                cx=self.cx,
+                cy=self.cy,
+                frame=frame,
+            )
+            self.last_qr_detections = qr_detections
+            self._publish_qr(qr_detections)
+
         self._publish_poses(detections)
-        self._publish_annotated(color_img, detections)
+        self._publish_annotated(color_img, detections, qr_detections)
+
+    def _should_run_qr(self):
+        if not self.enable_qr_detection:
+            return False
+        now = self.get_clock().now().nanoseconds / 1_000_000_000.0
+        if now - self.last_qr_at < self.qr_period_sec:
+            return False
+        self.last_qr_at = now
+        return True
+
+    def _publish_qr(self, detections):
+        msg = String()
+        msg.data = qr_detections_to_json(detections)
+        self.qr_pub.publish(msg)
 
     def _publish_poses(self, detections):
         pa = PoseArray()
@@ -173,7 +216,7 @@ class ObjectDetector(Node):
             pa.poses.append(p)
         self.pose_pub.publish(pa)
 
-    def _publish_annotated(self, color_img, detections):
+    def _publish_annotated(self, color_img, detections, qr_detections=None):
         if self.image_pub.get_subscription_count() == 0:
             return  # personne ne regarde, on epargne la bande passante
         annotated = color_img.copy()
@@ -182,6 +225,13 @@ class ObjectDetector(Node):
             cv2.circle(annotated, (px, py), r, col, 2)
             label = f'{z:.2f}m' if z > 0 else 'no depth'
             cv2.putText(annotated, label, (px - 30, py - r - 8),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, col, 2)
+        for qr in qr_detections or []:
+            pts = np.array(qr.points, dtype=np.int32).reshape((-1, 1, 2))
+            col = (255, 0, 255) if qr.z > 0 else (255, 255, 0)
+            cv2.polylines(annotated, [pts], isClosed=True, color=col, thickness=2)
+            label = f'QR {qr.qr} {qr.z:.2f}m' if qr.z > 0 else f'QR {qr.qr} no depth'
+            cv2.putText(annotated, label, (qr.px - 40, qr.py - qr.radius - 12),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, col, 2)
         out = Image()
         out.header = self.latest_color.header

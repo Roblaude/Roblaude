@@ -18,12 +18,14 @@ from datetime import datetime, timezone
 
 import paho.mqtt.client as mqtt
 import rclpy
+from rclpy.duration import Duration
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry, OccupancyGrid, Path
 from rclpy.node import Node
+from rclpy.time import Time
 from sensor_msgs.msg import CompressedImage, JointState, LaserScan
 from std_msgs.msg import Float32, String
-from tf2_msgs.msg import TFMessage
+import tf2_ros
 
 # arm_msgs vient du workspace Yahboom (/root/yahboomcar_ws). Import optionnel
 # pour que le bridge demarre meme si le workspace Yahboom n'est pas source.
@@ -111,6 +113,23 @@ TF_PUBLISH_PERIOD_S = 0.2     # 5 Hz max
 CAMERA_PUBLISH_PERIOD_S = 0.2   # 5 Hz max — bande passante
 JOINT_STATES_PUBLISH_PERIOD_S = 0.1  # 10 Hz max — fluidite visu bras
 
+# Paires TF utiles au front. On ne souscrit plus /tf a la main : le listener
+# maintient un buffer, et on publie seulement un snapshot a 5 Hz.
+TF_SNAPSHOT_EDGES = (
+    ('map', 'odom'),
+    ('odom', 'base_footprint'),
+    ('odom', 'base_link'),
+    ('base_footprint', 'base_link'),
+    ('base_link', 'laser'),
+    ('base_link', 'laser0_frame'),
+    ('base_link', 'laser1_frame'),
+    ('base_link', 'camera_link'),
+    ('base_link', 'camera_color_optical_frame'),
+    ('base_link', 'camera_depth_optical_frame'),
+    ('base_link', 'arm_base_link'),
+    ('base_link', 'imu_link'),
+)
+
 # Clamp teleop (double securite par-dessus le clamp backend)
 TELEOP_MAX_LIN = 0.5  # m/s
 TELEOP_MAX_ANG = 1.0  # rad/s
@@ -130,6 +149,12 @@ def build_joint_states_payload(names, positions) -> dict:
         'names': list(names),
         'positions': list(positions),
     }
+
+
+def finite_or_none(value):
+    """JSON strict : NaN/Infinity deviennent null."""
+    v = float(value)
+    return v if math.isfinite(v) else None
 
 
 # Limites pour cmd/arm (securite avant que le msg ROS atteigne YB_Node).
@@ -214,17 +239,16 @@ class MqttBridge(Node):
         self.create_subscription(String, 'mission/result', self._on_mission_result, 10)
 
         # --- Mode mapping (T3.5.3) : flux temps reel SLAM/Nav2 -> MQTT ---
-        # Cache TF (les TFMessage donnent des updates partiels, on accumule)
-        self._tf_buffer = {}
         self._last_scan_publish = 0.0
-        self._last_tf_publish = 0.0
         self._last_camera_publish = 0.0
         self._last_joint_states_publish = 0.0
         self.create_subscription(OccupancyGrid, '/map', self._on_map, 10)
         self.create_subscription(LaserScan, '/scan_multi', self._on_scan, 10)
         self.create_subscription(Path, '/plan', self._on_plan, 10)
         self.create_subscription(MarkerArray, '/explore/frontiers', self._on_frontiers, 10)
-        self.create_subscription(TFMessage, '/tf', self._on_tf, 10)
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+        self.create_timer(TF_PUBLISH_PERIOD_S, self._publish_tf_snapshot)
         # Camera + joint_states (T-final UI live)
         # Topics ROS configurables — le Yahboom M3 Pro peut publier sous
         # /usb_cam/image_raw/compressed ou /camera/color/image_raw/compressed.
@@ -490,7 +514,7 @@ class MqttBridge(Node):
             'schemaVersion': SCHEMA_VERSION,
             'messageId': str(uuid.uuid4()),
             'timestamp': now_iso(),
-            'ranges': [float(r) for r in msg.ranges],
+            'ranges': [finite_or_none(r) for r in msg.ranges],
             'angleMin': msg.angle_min,
             'angleIncrement': msg.angle_increment,
             'frameId': msg.header.frame_id,
@@ -524,18 +548,16 @@ class MqttBridge(Node):
         self.mqtt.publish(f'{self.base}/telemetry/frontiers',
                           json.dumps(payload), qos=0, retain=False)
 
-    def _on_tf(self, msg):
-        """TFMessage (updates partiels) -> cache + snapshot complet @5Hz."""
-        for t in msg.transforms:
-            self._tf_buffer[(t.header.frame_id, t.child_frame_id)] = t
-
-        now = time.monotonic()
-        if now - self._last_tf_publish < TF_PUBLISH_PERIOD_S:
-            return
-        self._last_tf_publish = now
-
+    def _publish_tf_snapshot(self):
+        """Publie un snapshot TF a 5 Hz via lookup, sans parser chaque /tf."""
         frames = []
-        for (parent, child), t in self._tf_buffer.items():
+        for parent, child in TF_SNAPSHOT_EDGES:
+            try:
+                t = self.tf_buffer.lookup_transform(
+                    parent, child, Time(), timeout=Duration(seconds=0.02)
+                )
+            except Exception:
+                continue
             tr = t.transform.translation
             r = t.transform.rotation
             frames.append({
@@ -543,6 +565,8 @@ class MqttBridge(Node):
                 'x': tr.x, 'y': tr.y, 'z': tr.z,
                 'qx': r.x, 'qy': r.y, 'qz': r.z, 'qw': r.w,
             })
+        if not frames:
+            return
         payload = {
             'schemaVersion': SCHEMA_VERSION, 'messageId': str(uuid.uuid4()),
             'timestamp': now_iso(), 'frames': frames,

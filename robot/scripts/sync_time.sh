@@ -25,8 +25,8 @@ if ! find_robot; then
     exit 1
 fi
 
-SSH_OPTS="-o StrictHostKeyChecking=accept-new"
-SSH="ssh $SSH_OPTS $ROBOT_USER@$ROBOT_IP"
+SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+SSH="sshpass -p $ROBOT_PASS ssh $SSH_OPTS $ROBOT_USER@$ROBOT_IP"
 
 # 1) Horloge ---------------------------------------------------------------
 MAC_UTC=$(date -u +"%Y-%m-%d %H:%M:%S")
@@ -50,7 +50,28 @@ else
 fi
 
 # 2) Broker IP -------------------------------------------------------------
-MAC_IP="$(ipconfig getifaddr en0 2>/dev/null || ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' | head -1)"
+ROBOT_PREFIX="$(echo "$ROBOT_IP" | cut -d. -f1-3)"
+MAC_IP=""
+
+# Decision soutenance : le Mac et le robot doivent etre sur le meme vrai Wi-Fi.
+# On choisit l'IP Wi-Fi du Mac qui partage le prefixe du robot.
+for iface in en0; do
+    CANDIDATE="$(ipconfig getifaddr "$iface" 2>/dev/null || true)"
+    if [ -z "$CANDIDATE" ]; then
+        CANDIDATE="$(ifconfig "$iface" 2>/dev/null | awk '/inet / {print $2; exit}')"
+    fi
+    if [ -n "$CANDIDATE" ] && [ "$(echo "$CANDIDATE" | cut -d. -f1-3)" = "$ROBOT_PREFIX" ]; then
+        MAC_IP="$CANDIDATE"
+        break
+    fi
+done
+
+if [ -z "$MAC_IP" ]; then
+    MAC_IP="$(ipconfig getifaddr en0 2>/dev/null || true)"
+fi
+if [ -z "$MAC_IP" ]; then
+    MAC_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' | head -1)"
+fi
 echo ""
 echo "━━━ broker MQTT ━━━"
 

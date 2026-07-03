@@ -1,8 +1,8 @@
 [Unit]
 Description=RobLaude ROS container m3pro
 Requires=docker.service
-After=docker.service micro-ros-agent.service
-Wants=micro-ros-agent.service
+After=docker.service roblaude-demo-preflight.service micro-ros-agent.service
+Wants=roblaude-demo-preflight.service micro-ros-agent.service
 
 [Service]
 Type=oneshot

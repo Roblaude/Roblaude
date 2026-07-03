@@ -10,6 +10,7 @@ Restart=always
 RestartSec=5
 TimeoutStartSec=120
 TimeoutStopSec=20
+Environment=ROBLAUDE_LINK_WAIT_SECS=20
 
 # Lie /dev/myserial au CP210x (STM32) — jamais le CH340 (micro). Cf roblaude-link-stm32.sh
 ExecStartPre=/usr/local/bin/roblaude-link-stm32.sh

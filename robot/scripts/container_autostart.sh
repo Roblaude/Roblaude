@@ -21,6 +21,7 @@ M3PRO_WS="${M3PRO_WS:-/root/M3Pro_ws}"
 MAPS_DIR="${MAPS_DIR:-/root/maps}"
 BROKER_IP_FILE="${BROKER_IP_FILE:-/etc/roblaude/broker_ip}"
 ROBLAUDE_MODE="${ROBLAUDE_MODE:-minimal}"
+ROBLAUDE_ARM_HOME_ON_BOOT="${ROBLAUDE_ARM_HOME_ON_BOOT:-true}"
 
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-30}"
 export FASTDDS_BUILTIN_TRANSPORTS="${FASTDDS_BUILTIN_TRANSPORTS:-UDPv4}"
@@ -156,13 +157,21 @@ if [ "$ROBLAUDE_MODE" = "full" ]; then
         echo "[autostart] roblaude_pickplace pas encore build, detecteur non lance"
     fi
 
-    # Bras en HOME au demarrage (apres YB_Node pret).
-    arm_home_when_ready
+    # Bras en HOME au demarrage (apres YB_Node pret), sauf maintenance.
+    if [ "$ROBLAUDE_ARM_HOME_ON_BOOT" = "true" ]; then
+        arm_home_when_ready
+    else
+        echo "[autostart] ARM_HOME skip (ROBLAUDE_ARM_HOME_ON_BOOT=false)"
+    fi
 else
     echo "[autostart] mode minimal : camera/detector non lances au boot"
     # Bras en HOME au boot meme en minimal (demande explicite) : YB_Node frais +
     # pas de charge = le bon moment pour partir d'une pose connue.
-    arm_home_when_ready
+    if [ "$ROBLAUDE_ARM_HOME_ON_BOOT" = "true" ]; then
+        arm_home_when_ready
+    else
+        echo "[autostart] ARM_HOME skip (ROBLAUDE_ARM_HOME_ON_BOOT=false)"
+    fi
 fi
 
 echo "[autostart] tout lance. Logs : /tmp/roslogs/*.log"

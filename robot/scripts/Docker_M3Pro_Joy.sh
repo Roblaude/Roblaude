@@ -43,9 +43,18 @@ fi
 # Avant Docker : stabilise l'USB hote. Le container doit demarrer apres
 # enumeration des peripheriques critiques, sinon les drivers ROS voient des
 # devices absents ou des minors USB depasses.
+run_usb_guard() {
+    guard=$1
+    if [ "$(id -u)" -eq 0 ]; then
+        "$guard"
+    else
+        sudo -n "$guard"
+    fi
+}
+
 if command -v roblaude-usb-boot-guard.sh >/dev/null 2>&1; then
     echo "Preflight USB hote..."
-    if ! sudo -n roblaude-usb-boot-guard.sh; then
+    if ! run_usb_guard "$(command -v roblaude-usb-boot-guard.sh)"; then
         echo "ATTENTION : USB boot guard non OK"
         if [ "$ROBLAUDE_STRICT_USB_PREFLIGHT" = "true" ]; then
             echo "ABORT : USB critique absent, m3pro non lance"
@@ -54,7 +63,7 @@ if command -v roblaude-usb-boot-guard.sh >/dev/null 2>&1; then
     fi
 elif [ -x /home/jetson/roblaude_ws/scripts/roblaude-usb-boot-guard.sh ]; then
     echo "Preflight USB hote..."
-    if ! sudo -n /home/jetson/roblaude_ws/scripts/roblaude-usb-boot-guard.sh; then
+    if ! run_usb_guard /home/jetson/roblaude_ws/scripts/roblaude-usb-boot-guard.sh; then
         echo "ATTENTION : USB boot guard non OK"
         if [ "$ROBLAUDE_STRICT_USB_PREFLIGHT" = "true" ]; then
             echo "ABORT : USB critique absent, m3pro non lance"

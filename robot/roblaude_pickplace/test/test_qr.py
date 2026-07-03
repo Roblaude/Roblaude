@@ -1,5 +1,6 @@
 """Tests QR sans camera reelle : OpenCV est remplace par un faux detecteur."""
 import json
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -42,6 +43,44 @@ class FakeEmptyDetector:
         return "", None, None
 
 
+def fake_zbar_decode(_image):
+    return [
+        SimpleNamespace(
+            data=b"OBJ_ZBAR",
+            polygon=[
+                SimpleNamespace(x=5, y=6),
+                SimpleNamespace(x=25, y=6),
+                SimpleNamespace(x=25, y=26),
+                SimpleNamespace(x=5, y=26),
+            ],
+        )
+    ]
+
+
+class FakeAruco:
+    DICT_APRILTAG_36h11 = 1
+
+    @staticmethod
+    def DetectorParameters_create():
+        return object()
+
+    @staticmethod
+    def Dictionary_get(dictionary_id):
+        return f"dict:{dictionary_id}"
+
+    @staticmethod
+    def detectMarkers(_image, dictionary, parameters=None):
+        if dictionary != "dict:1":
+            return [], None, []
+        corners = [
+            np.array(
+                [[[10.0, 12.0], [30.0, 12.0], [30.0, 32.0], [10.0, 32.0]]],
+                dtype=np.float32,
+            )
+        ]
+        return corners, np.array([[1]], dtype=np.int32), []
+
+
 def test_detect_qr_candidates_multi_ignore_text_empty():
     image = np.zeros((80, 80, 3), dtype=np.uint8)
     candidates = detect_qr_candidates(image, FakeMultiDetector())
@@ -68,6 +107,40 @@ def test_detect_qr_candidates_empty_image_or_empty_text():
     assert detect_qr_candidates(None, FakeEmptyDetector()) == []
     assert detect_qr_candidates(np.zeros((80, 80), dtype=np.uint8), FakeEmptyDetector()) == []
     assert detect_qr_candidates(np.zeros((80, 80, 3), dtype=np.uint8), FakeEmptyDetector()) == []
+
+
+def test_detect_qr_candidates_zbar_fallback():
+    image = np.zeros((80, 80, 3), dtype=np.uint8)
+    candidates = detect_qr_candidates(image, FakeEmptyDetector(), zbar_decode=fake_zbar_decode)
+
+    assert len(candidates) == 1
+    assert candidates[0].text == "OBJ_ZBAR"
+    assert candidates[0].points == ((5, 6), (25, 6), (25, 26), (5, 26))
+    assert candidates[0].px == 15
+    assert candidates[0].py == 16
+
+
+def test_detect_qr_candidates_zbar_without_opencv_detector():
+    image = np.zeros((80, 80, 3), dtype=np.uint8)
+    candidates = detect_qr_candidates(image, detector=None, zbar_decode=fake_zbar_decode)
+
+    assert len(candidates) == 1
+    assert candidates[0].text == "OBJ_ZBAR"
+
+
+def test_detect_qr_candidates_apriltag_fallback():
+    image = np.zeros((80, 80, 3), dtype=np.uint8)
+    candidates = detect_qr_candidates(
+        image,
+        detector=None,
+        zbar_decode=lambda _image: [],
+        aruco_module=FakeAruco,
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0].text == "APRILTAG_36h11:1"
+    assert candidates[0].px == 20
+    assert candidates[0].py == 22
 
 
 def test_build_qr_detections_with_depth_and_backprojection():

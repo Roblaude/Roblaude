@@ -5,6 +5,8 @@
 set -u
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 SVC=micro-ros-agent.service
+M3PRO_SVC=roblaude-m3pro.service
+PREFLIGHT_SVC=roblaude-demo-preflight.service
 LINK=/usr/local/bin/roblaude-link-stm32.sh
 RECOVER=/usr/local/bin/roblaude-stm32-usb-recover.sh
 # Tourne en root (oneshot systemd) : on garde le diag dans un dossier root-owned,
@@ -107,6 +109,15 @@ if [ $((now-last)) -ge $COOLDOWN ]; then
   echo "$now" > "$STAMP"; systemctl restart "$SVC"; echo "restart $SVC"
 else
   echo "cooldown actif, pas de restart"
+fi
+
+# Si l'USB est revenu apres un boot NO-GO, on retente la sequence demo propre.
+# Le service m3pro depend du preflight : si camera/STM32/CH341 restent absents,
+# il restera bloque sans casser le Wi-Fi/SSH.
+if cp210_present; then
+  systemctl reset-failed "$PREFLIGHT_SVC" "$M3PRO_SVC" 2>/dev/null || true
+  systemctl start "$PREFLIGHT_SVC" 2>/dev/null || true
+  systemctl start "$M3PRO_SVC" 2>/dev/null || true
 fi
 # garde les 30 plus recents (noms horodates -> tri lexical = chronologique)
 find "$DIAGDIR" -maxdepth 1 -name 'incident_*.log' -type f | sort | head -n -30 | while read -r f; do rm -f -- "$f"; done

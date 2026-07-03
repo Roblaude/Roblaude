@@ -14,6 +14,7 @@ set -e
 SRC="$(cd "$(dirname "$0")" && pwd)"
 
 echo "━━━ 1/4 : helpers dans /usr/local/bin ━━━"
+sudo install -o jetson -g jetson -m 0755 "$SRC/Docker_M3Pro_Joy.sh"          /home/jetson/Docker_M3Pro_Joy.sh
 sudo install -m 0755 "$SRC/roblaude-usb-stable.sh"         /usr/local/bin/roblaude-usb-stable.sh
 sudo install -m 0755 "$SRC/roblaude-link-stm32.sh"        /usr/local/bin/roblaude-link-stm32.sh
 sudo install -m 0755 "$SRC/roblaude-stm32-usb-recover.sh" /usr/local/bin/roblaude-stm32-usb-recover.sh

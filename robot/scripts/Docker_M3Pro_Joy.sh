@@ -25,6 +25,7 @@ done
 xhost +local:root >/dev/null 2>&1 || true
 ROBLAUDE_MODE="${ROBLAUDE_MODE:-minimal}"
 ROBLAUDE_ARM_HOME_ON_BOOT="${ROBLAUDE_ARM_HOME_ON_BOOT:-true}"
+ROBLAUDE_STRICT_USB_PREFLIGHT="${ROBLAUDE_STRICT_USB_PREFLIGHT:-true}"
 
 # Repertoires hote persistants (jetson est owner, pas de sudo)
 mkdir -p /home/jetson/roblaude_ws/scripts
@@ -44,10 +45,22 @@ fi
 # devices absents ou des minors USB depasses.
 if command -v roblaude-usb-boot-guard.sh >/dev/null 2>&1; then
     echo "Preflight USB hote..."
-    sudo -n roblaude-usb-boot-guard.sh || echo "ATTENTION : USB boot guard non OK"
+    if ! sudo -n roblaude-usb-boot-guard.sh; then
+        echo "ATTENTION : USB boot guard non OK"
+        if [ "$ROBLAUDE_STRICT_USB_PREFLIGHT" = "true" ]; then
+            echo "ABORT : USB critique absent, m3pro non lance"
+            exit 1
+        fi
+    fi
 elif [ -x /home/jetson/roblaude_ws/scripts/roblaude-usb-boot-guard.sh ]; then
     echo "Preflight USB hote..."
-    sudo -n /home/jetson/roblaude_ws/scripts/roblaude-usb-boot-guard.sh || echo "ATTENTION : USB boot guard non OK"
+    if ! sudo -n /home/jetson/roblaude_ws/scripts/roblaude-usb-boot-guard.sh; then
+        echo "ATTENTION : USB boot guard non OK"
+        if [ "$ROBLAUDE_STRICT_USB_PREFLIGHT" = "true" ]; then
+            echo "ABORT : USB critique absent, m3pro non lance"
+            exit 1
+        fi
+    fi
 fi
 
 # Recreer "m3pro" a chaque boot pour que les nouveaux volumes/flags prennent.

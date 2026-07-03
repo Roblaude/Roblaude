@@ -5,6 +5,8 @@ set -u
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 HUB=${ROBLAUDE_USB_GUARD_HUB:-1-2}
+SAFE_PORTS=${ROBLAUDE_USB_GUARD_SAFE_PORTS:-4}
+ALLOW_HUB_FALLBACK=${ROBLAUDE_USB_GUARD_ALLOW_HUB_FALLBACK:-false}
 MAX_ATTEMPTS=${ROBLAUDE_USB_GUARD_ATTEMPTS:-2}
 OFF_SECS=${ROBLAUDE_USB_GUARD_OFF_SECS:-4}
 SETTLE_SECS=${ROBLAUDE_USB_GUARD_SETTLE_SECS:-12}
@@ -115,9 +117,6 @@ cycle_hub_fallback() {
 ports_to_try() {
   ports=""
   missing=$(missing_required)
-  case " $missing " in
-    *" wifi "*) ports="$ports 1" ;;
-  esac
   # Depuis le recablage fiable, tout le bloc robot (STM32, CH341, Orbbec)
   # est derriere le hub lourd branche sur le port 4 du hub 1-2.
   case " $missing " in
@@ -126,7 +125,13 @@ ports_to_try() {
   for p in $(fault_ports_from_dmesg); do
     ports="$ports $p"
   done
-  echo "$ports" | tr ' ' '\n' | sed '/^$/d' | sort -n | uniq
+  # Mode demo strict : ne jamais toucher aux ports hors whitelist. Ca garde le
+  # Wi-Fi/SSH vivant meme si un vieux dmesg mentionne un autre port.
+  echo "$ports" | tr ' ' '\n' | sed '/^$/d' | sort -n | uniq |
+    awk -v safe="$SAFE_PORTS" '
+      BEGIN { split(safe, a, /[ ,]+/); for (i in a) allowed[a[i]]=1 }
+      allowed[$0] { print }
+    '
 }
 
 {
@@ -157,8 +162,10 @@ while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
   for p in $ports; do
     cycle_port "$p" || failed=true
   done
-  if [ "$failed" = true ]; then
+  if [ "$failed" = true ] && [ "$ALLOW_HUB_FALLBACK" = true ]; then
     cycle_hub_fallback || true
+  elif [ "$failed" = true ]; then
+    log "fallback hub entier desactive (ROBLAUDE_USB_GUARD_ALLOW_HUB_FALLBACK=false)"
   fi
 
   {

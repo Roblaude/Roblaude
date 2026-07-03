@@ -9,6 +9,7 @@ START_CAMERA=false
 BOOT_ONLY=false
 LOG_DIR=/var/log/roblaude
 LOG="$LOG_DIR/demo_preflight_$(date +%Y%m%d-%H%M%S).log"
+STATUS_FILE=${ROBLAUDE_PREFLIGHT_STATUS_FILE:-/run/roblaude-demo-preflight.status}
 
 for arg in "$@"; do
   case "$arg" in
@@ -32,6 +33,18 @@ log() {
 ok() { log "OK  $*"; }
 warn() { log "WARN $*"; }
 ko() { log "KO  $*"; FAILED=true; }
+
+write_status() {
+  status=$1
+  reason=${2:-}
+  install -d -m 0755 "$(dirname "$STATUS_FILE")" 2>/dev/null || true
+  {
+    echo "status=$status"
+    echo "reason=$reason"
+    echo "log=$LOG"
+    date -Is 2>/dev/null | sed 's/^/time=/'
+  } > "$STATUS_FILE" 2>/dev/null || true
+}
 
 FAILED=false
 RESTARTED_M3PRO=false
@@ -72,7 +85,8 @@ check_usb() {
   usb_present 1a86:7522 || missing_after="$missing_after ch341"
   usb_present 2bc5:06a0 || missing_after="$missing_after orbbec_depth"
   usb_present 2bc5:0561 || missing_after="$missing_after orbbec_rgb"
-  [ -z "$missing_after" ] && { ok "USB revenus apres repair"; return 0; }
+  [ -z "$missing_after" ] && { ok "USB revenus apres repair"; write_status "GO" "usb-ok"; return 0; }
+  write_status "NO_GO" "usb-missing:$missing_after"
   ko "USB toujours manquants:$missing_after"
   return 1
 }
@@ -207,7 +221,9 @@ check_camera() {
 
 log "=== RobLaude demo preflight $(date) repair=$REPAIR start_camera=$START_CAMERA boot=$BOOT_ONLY ==="
 log "uptime: $(uptime)"
-check_usb || true
+if check_usb; then
+  write_status "GO" "usb-ok"
+fi
 if [ "$BOOT_ONLY" = true ]; then
   if [ "$FAILED" = true ]; then
     log "RESULT=NO_GO_BOOT log=$LOG"
@@ -215,6 +231,12 @@ if [ "$BOOT_ONLY" = true ]; then
   fi
   log "RESULT=GO_BOOT log=$LOG"
   exit 0
+fi
+
+if [ "$FAILED" = true ]; then
+  log "STOP: USB critique KO, on ne lance pas Docker/ROS/camera en etat degrade"
+  log "RESULT=NO_GO log=$LOG"
+  exit 1
 fi
 
 check_m3pro || true

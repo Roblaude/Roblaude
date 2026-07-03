@@ -1,0 +1,17 @@
+[Unit]
+Description=RobLaude demo boot preflight
+Requires=docker.service
+After=roblaude-usb-stable.service docker.service systemd-udev-settle.service
+Before=roblaude-m3pro.service
+Wants=roblaude-usb-stable.service systemd-udev-settle.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/roblaude-demo-preflight.sh --repair --boot
+TimeoutStartSec=180
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -21,3 +21,7 @@ object_detector:
     max_detection_depth: 1.0     # ignore au-dela (m)
     min_detection_depth: 0.15    # ignore en-deca (m)
     depth_scale: 0.001           # 16UC1 mm -> m
+
+    # --- QR code ---
+    enable_qr_detection: true
+    qr_period_sec: 0.5          # 2 Hz, evite de charger le Jetson pendant la vision

@@ -53,7 +53,9 @@ def generate_launch_description():
                                                  # et est detecte comme obstacle fictif (vu IRL 22 mai).
                 'max_laser_range': 4.0,          # capacite reelle merger Yahboom (warning slam si plus)
                 'minimum_time_interval': 0.5,
-                'transform_publish_period': 0.02,
+                # 20 Hz suffit pour Nav2/visualisation et libere le Nano.
+                # 50 Hz surchargeait mqtt_bridge/TF pendant l'automap.
+                'transform_publish_period': 0.05,
                 'map_update_interval': 3.0,
                 'scan_buffer_size': 10,
                 'transform_timeout': 0.5,

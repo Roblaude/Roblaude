@@ -24,6 +24,7 @@ done
 # Autoriser X local pour le container
 xhost +local:root >/dev/null 2>&1 || true
 ROBLAUDE_MODE="${ROBLAUDE_MODE:-minimal}"
+ROBLAUDE_ARM_HOME_ON_BOOT="${ROBLAUDE_ARM_HOME_ON_BOOT:-true}"
 
 # Repertoires hote persistants (jetson est owner, pas de sudo)
 mkdir -p /home/jetson/roblaude_ws/scripts
@@ -38,6 +39,17 @@ if [ ! -d /etc/roblaude ]; then
     echo "ATTENTION : /etc/roblaude absent — lance install_persistence.sh d'abord"
 fi
 
+# Avant Docker : stabilise l'USB hote. Le container doit demarrer apres
+# enumeration des peripheriques critiques, sinon les drivers ROS voient des
+# devices absents ou des minors USB depasses.
+if command -v roblaude-usb-boot-guard.sh >/dev/null 2>&1; then
+    echo "Preflight USB hote..."
+    sudo -n roblaude-usb-boot-guard.sh || echo "ATTENTION : USB boot guard non OK"
+elif [ -x /home/jetson/roblaude_ws/scripts/roblaude-usb-boot-guard.sh ]; then
+    echo "Preflight USB hote..."
+    sudo -n /home/jetson/roblaude_ws/scripts/roblaude-usb-boot-guard.sh || echo "ATTENTION : USB boot guard non OK"
+fi
+
 # Recreer "m3pro" a chaque boot pour que les nouveaux volumes/flags prennent.
 # Le container persiste via --restart=unless-stopped tant que ce script n'est
 # pas rejoue (ex: relogin).
@@ -46,9 +58,9 @@ if docker ps -a --format '{{.Names}}' | grep -qx m3pro; then
     docker rm m3pro >/dev/null 2>&1 || true
 fi
 
-# DaBai DCW2 : la couleur (RGB) passe par l'UVC /dev/video0 (node pub_rgb_image),
-# la depth par /dev/bus/usb (OrbbecSDK). Sans /dev/video0 dans le container, pas
-# de flux couleur. On le passe s'il est present.
+# DaBai DCW2 : l'OrbbecSDK lit /dev/bus/usb. Il faut un bind dynamique +
+# cgroup wildcard, sinon apres re-enumeration USB le container ne voit que les
+# anciens minors (ex: 189:12) et la camera devient invisible (ex: 189:51).
 VIDEO_DEV=""
 [ -e /dev/video0 ] && VIDEO_DEV="--device=/dev/video0"
 
@@ -64,6 +76,7 @@ docker run -d \
   -e ROS_DOMAIN_ID=30 \
   -e FASTDDS_BUILTIN_TRANSPORTS=UDPv4 \
   -e ROBLAUDE_MODE="${ROBLAUDE_MODE}" \
+  -e ROBLAUDE_ARM_HOME_ON_BOOT="${ROBLAUDE_ARM_HOME_ON_BOOT}" \
   -v /run/user/1000/pulse:/run/user/1000/pulse:ro \
   -v /home/jetson/.config/pulse:/root/.config/pulse:ro \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
@@ -71,7 +84,8 @@ docker run -d \
   -v /home/jetson/robot_maps:/root/maps \
   -v /home/jetson/.local:/root/.local \
   -v /etc/roblaude:/etc/roblaude:ro \
-  --device=/dev/bus/usb \
+  -v /dev/bus/usb:/dev/bus/usb \
+  --device-cgroup-rule='c 189:* rwm' \
   --device=/dev/input \
   $VIDEO_DEV \
   --security-opt apparmor:unconfined \

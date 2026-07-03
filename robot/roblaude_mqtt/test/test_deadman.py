@@ -9,9 +9,10 @@ from unittest.mock import MagicMock, patch
 def _load_bridge():
     with patch.dict('sys.modules', {
         'rclpy': MagicMock(), 'rclpy.node': MagicMock(),
+        'rclpy.time': MagicMock(), 'rclpy.duration': MagicMock(),
         'std_msgs.msg': MagicMock(), 'nav_msgs.msg': MagicMock(),
         'sensor_msgs.msg': MagicMock(), 'geometry_msgs.msg': MagicMock(),
-        'visualization_msgs.msg': MagicMock(), 'tf2_msgs.msg': MagicMock(),
+        'visualization_msgs.msg': MagicMock(), 'tf2_ros': MagicMock(),
         'paho': MagicMock(), 'paho.mqtt': MagicMock(), 'paho.mqtt.client': MagicMock(),
     }):
         from roblaude_mqtt.mqtt_bridge import TeleopDeadman

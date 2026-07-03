@@ -40,6 +40,13 @@ if ! python3 -c "import paho.mqtt" 2>/dev/null; then
         exit 1
     }
 fi
+if ! python3 -c "import pyzbar.pyzbar" 2>/dev/null; then
+    echo "[autostart] installation pyzbar (fallback QR)..."
+    pip install --quiet --user 'pyzbar~=0.1' || {
+        echo "[autostart] ECHEC pip install pyzbar"
+        echo "[autostart] QR decode indisponible tant que pyzbar manque"
+    }
+fi
 
 # --- Source de l'env ROS et des drivers Yahboom (dans l'image, jamais wipes) ---
 source /opt/ros/humble/setup.bash

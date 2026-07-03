@@ -3,6 +3,7 @@
 # Lu par le backend via SSH pour la page Reparation du front.
 set -u
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+TOPIC_TIMEOUT="${ROBOT_STATUS_TOPIC_TIMEOUT:-10}"
 
 # 1. /dev/myserial pointe-t-il bien sur le STM32 (CP210x) ?
 myserial_ok=false
@@ -41,8 +42,8 @@ if [ "$m3pro" = up ] && [ "$myserial_ok" = true ] && [ "$agent_log_ok" = true ];
       source /opt/ros/humble/setup.bash
       source /root/yahboomcar_ws/install/setup.bash 2>/dev/null || true
       source /root/roblaude_ws/install/setup.bash 2>/dev/null || true
-      timeout 4 ros2 topic echo /battery --once >/tmp/roblaude_battery_check 2>/dev/null ||
-      timeout 4 ros2 topic echo /odom_raw --once >/tmp/roblaude_odom_raw_check 2>/dev/null
+      timeout '"$TOPIC_TIMEOUT"' ros2 topic echo /battery --once >/tmp/roblaude_battery_check 2>/dev/null ||
+      timeout '"$TOPIC_TIMEOUT"' ros2 topic echo /odom_raw --once >/tmp/roblaude_odom_raw_check 2>/dev/null
     ' && stm32_data=true
 fi
 

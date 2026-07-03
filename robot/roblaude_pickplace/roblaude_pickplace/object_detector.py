@@ -72,11 +72,11 @@ class ObjectDetector(Node):
         self.min_depth = float(self.declare_parameter('min_detection_depth', 0.15).value)
         self.depth_scale = float(self.declare_parameter('depth_scale', 0.001).value)
 
-        # --- QR basse frequence : la camera tourne deja, le decodeur reste leger ---
+        # --- QR/AprilTag basse frequence : la camera tourne deja, decodeur leger ---
         self.enable_qr_detection = bool(
             self.declare_parameter('enable_qr_detection', True).value)
         self.qr_period_sec = float(self.declare_parameter('qr_period_sec', 0.5).value)
-        self.qr_detector = cv2.QRCodeDetector()
+        self.qr_detector = None
         self.last_qr_at = 0.0
         self.last_qr_detections = []
 
@@ -230,7 +230,7 @@ class ObjectDetector(Node):
             pts = np.array(qr.points, dtype=np.int32).reshape((-1, 1, 2))
             col = (255, 0, 255) if qr.z > 0 else (255, 255, 0)
             cv2.polylines(annotated, [pts], isClosed=True, color=col, thickness=2)
-            label = f'QR {qr.qr} {qr.z:.2f}m' if qr.z > 0 else f'QR {qr.qr} no depth'
+            label = f'TAG {qr.qr} {qr.z:.2f}m' if qr.z > 0 else f'TAG {qr.qr} no depth'
             cv2.putText(annotated, label, (qr.px - 40, qr.py - qr.radius - 12),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, col, 2)
         out = Image()

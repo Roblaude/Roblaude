@@ -208,7 +208,7 @@ export function RobotRepairPage() {
 
       {/* actions globales */}
       <div className="flex flex-wrap gap-2">
-        {(['reconnect_stm32', 'restart_ros', 'resync_clock', 'reboot', 'shutdown'] as RepairAction[]).map((a) => (
+        {(['reconnect_stm32', 'restart_ros', 'resync_clock', 'start_perception', 'reboot', 'shutdown'] as RepairAction[]).map((a) => (
           <button
             key={a}
             onClick={() => repair(a)}

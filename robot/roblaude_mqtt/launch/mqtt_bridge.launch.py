@@ -25,6 +25,8 @@ def generate_launch_description():
         DeclareLaunchArgument('broker_host', default_value='localhost'),
         DeclareLaunchArgument('broker_port', default_value='1883'),
         DeclareLaunchArgument('robot_id', default_value='1'),
+        DeclareLaunchArgument('mqtt_user', default_value=''),
+        DeclareLaunchArgument('mqtt_password', default_value=''),
     ]
 
     bridge = Node(
@@ -43,6 +45,10 @@ def generate_launch_description():
                     LaunchConfiguration('broker_port'), value_type=int),
                 'robot_id': ParameterValue(
                     LaunchConfiguration('robot_id'), value_type=int),
+                'mqtt_user': ParameterValue(
+                    LaunchConfiguration('mqtt_user'), value_type=str),
+                'mqtt_password': ParameterValue(
+                    LaunchConfiguration('mqtt_password'), value_type=str),
             },
         ],
     )

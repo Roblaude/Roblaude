@@ -34,8 +34,8 @@ def test_patch_les_vraies_cles_humble():
     p = humble_params()
     apply_overrides(p)  # ne doit PAS lever de KeyError sur 'goal_checker'
     c = p['controller_server']['ros__parameters']
-    assert c['general_goal_checker']['xy_goal_tolerance'] == 0.35
-    assert c['general_goal_checker']['yaw_goal_tolerance'] == 0.5
+    assert c['general_goal_checker']['xy_goal_tolerance'] == 0.22
+    assert c['general_goal_checker']['yaw_goal_tolerance'] == 0.35
     assert c['progress_checker']['movement_time_allowance'] == 20.0
     assert c['controller_frequency'] == 7.5
     assert c['FollowPath']['max_vel_x'] == 0.09

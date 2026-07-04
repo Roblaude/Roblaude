@@ -11,7 +11,6 @@ import {
   User,
   LogOut,
   Map,
-  Terminal,
   Sparkles,
   Package,
   Wrench,
@@ -24,9 +23,10 @@ const NAV_ITEMS = [
   { to: '/mapping', label: 'Mode mapping', code: '04', Icon: Map, adminOnly: false },
   { to: '/admin', label: 'Admin', code: '05', Icon: Settings2, adminOnly: true },
   { to: '/admin/objects', label: 'Objets', code: '06', Icon: Package, adminOnly: true },
-  { to: '/admin/ssh', label: 'SSH admin', code: '07', Icon: Terminal, adminOnly: true },
-  { to: '/admin/repair', label: 'Réparation', code: '08', Icon: Wrench, adminOnly: true },
-  { to: '/profile', label: 'Profil', code: '09', Icon: User, adminOnly: false },
+  // SSH admin retire de la nav (accessible via l'URL /admin/ssh si besoin) :
+  // surface de risque inutile en demo, la page Reparation couvre les cas courants
+  { to: '/admin/repair', label: 'Réparation', code: '07', Icon: Wrench, adminOnly: true },
+  { to: '/profile', label: 'Profil', code: '08', Icon: User, adminOnly: false },
 ]
 
 export function Sidebar() {

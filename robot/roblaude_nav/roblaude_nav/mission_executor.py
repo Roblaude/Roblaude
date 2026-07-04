@@ -36,6 +36,7 @@ from rclpy.node import Node
 
 from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseArray, Twist
+from nav_msgs.msg import Odometry
 from nav2_msgs.action import NavigateToPose
 from std_msgs.msg import String
 
@@ -117,6 +118,15 @@ class MissionExecutor(Node):
             self.declare_parameter('gripper_close_value', GRIPPER_CLOSE).value)
         self.detect_timeout = float(self.declare_parameter('detect_timeout', 15.0).value)
         self.grasp_step_period = float(self.declare_parameter('grasp_step_period', 1.5).value)
+        # approche aveugle avant saisie (cf _start_grasp), asservie sur /odom :
+        # a basse vitesse les moteurs patinent, la duree x vitesse ment
+        self.approach_reach_x = float(self.declare_parameter('approach_reach_x', 0.20).value)
+        self.approach_speed = float(self.declare_parameter('approach_speed', 0.07).value)
+        self.approach_timer = None
+        self.approach_dist = 0.0
+        self.approach_start = None
+        self.odom_xy = None
+        self.create_subscription(Odometry, '/odom', self._on_odom, 10)
         self.deposit_period = float(self.declare_parameter('deposit_period', 2.0).value)
         self.arm_time_ms = int(self.declare_parameter('arm_time_ms', 1000).value)
         self.geom = ArmGeometry()
@@ -327,6 +337,47 @@ class MissionExecutor(Node):
         self.phase = 'GRASPING'
         self._send(self.status_pub, {'missionId': mid, 'state': 'GRASPING'})
 
+        # La camera depth ne voit rien a moins de ~15cm d'elle alors que le
+        # bras n'atteint que x<=0.22 : les deux zones ne se recouvrent pas.
+        # Donc : detection a distance, puis approche aveugle en ligne droite
+        # jusqu'a la distance de saisie, et IK sur la position recalee.
+        dx = self.grasp_target[0] - self.approach_reach_x
+        if dx > 0.02:
+            self.get_logger().info(
+                'objet a %.2fm -> approche aveugle de %.2fm' % (self.grasp_target[0], dx))
+            self.approach_dist = dx
+            self.approach_start = self.odom_xy
+            self.approach_deadline = self.get_clock().now().nanoseconds / 1e9 + 10.0
+            self.approach_timer = self.create_timer(0.1, self._approach_tick)
+            return
+        self._grasp_with_ik()
+
+    def _on_odom(self, msg):
+        p = msg.pose.pose.position
+        self.odom_xy = (p.x, p.y)
+
+    def _approach_tick(self):
+        now = self.get_clock().now().nanoseconds / 1e9
+        traveled = 0.0
+        if self.approach_start is not None and self.odom_xy is not None:
+            traveled = math.hypot(self.odom_xy[0] - self.approach_start[0],
+                                  self.odom_xy[1] - self.approach_start[1])
+        if traveled < self.approach_dist and now < self.approach_deadline:
+            t = Twist()
+            t.linear.x = self.approach_speed
+            self.cmd_vel_pub.publish(t)
+            return
+        self._cancel_timer('approach_timer')
+        self.cmd_vel_pub.publish(Twist())  # stop
+        if traveled < self.approach_dist:
+            self.get_logger().warn('approche incomplete (%.2f/%.2fm), on tente quand meme'
+                                   % (traveled, self.approach_dist))
+        # l'objet est maintenant a ~approach_reach_x devant (yaw/hauteur inchanges)
+        rest = max(0.0, self.approach_dist - traveled)
+        self.grasp_target = (self.approach_reach_x + rest, self.grasp_target[1], self.grasp_target[2])
+        self._grasp_with_ik()
+
+    def _grasp_with_ik(self):
         joints = compute_ik(self.grasp_target[0], self.grasp_target[1],
                             self.grasp_target[2], self.geom)
         if joints is None:
@@ -381,6 +432,7 @@ class MissionExecutor(Node):
 
     def _reset_pp(self):
         self._cancel_timer('detect_timer')
+        self._cancel_timer('approach_timer')
         self._cancel_timer('grasp_timer')
         self._cancel_timer('deposit_timer')
         self.pp = None

@@ -34,22 +34,29 @@ export function MissionDetailPage() {
 
   useEffect(() => {
     let cancelled = false
-    ;(async () => {
-      setLoading(true)
-      setError(null)
+    const load = async (initial: boolean) => {
+      if (initial) {
+        setLoading(true)
+        setError(null)
+      }
       try {
         const res = await apiFetch(`/missions/${id}`)
         if (!res.ok) throw new Error('Mission introuvable')
         const json = (await res.json()) as { data: Mission }
         if (!cancelled) setMission(json.data)
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Erreur de chargement')
+        if (!cancelled && initial) setError(e instanceof Error ? e.message : 'Erreur de chargement')
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled && initial) setLoading(false)
       }
-    })()
+    }
+    load(true)
+    // suivi live : la progression (NAVIGATING -> DETECTING -> GRASPING...)
+    // doit avancer sans recharger la page
+    const poll = setInterval(() => load(false), 2000)
     return () => {
       cancelled = true
+      clearInterval(poll)
     }
   }, [id])
 

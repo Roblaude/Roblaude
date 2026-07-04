@@ -39,10 +39,12 @@ status_line() {
 }
 
 missing_required() {
+  # ch341 = micro : HS materiellement, pas requis pour la demo -> plus dans la
+  # liste, sinon le guard power-cycle le port 4 en boucle et fait tomber
+  # STM32 + camera avec lui
   missing=""
   present 2357:012e || missing="$missing wifi"
   present 10c4:ea60 || missing="$missing stm32"
-  present 1a86:7522 || missing="$missing ch341"
   present 2bc5:06a0 || missing="$missing orbbec_depth"
   present 2bc5:0561 || missing="$missing orbbec_rgb"
   echo "$missing" | sed 's/^ *//'
@@ -120,7 +122,7 @@ ports_to_try() {
   # Depuis le recablage fiable, tout le bloc robot (STM32, CH341, Orbbec)
   # est derriere le hub lourd branche sur le port 4 du hub 1-2.
   case " $missing " in
-    *" stm32 "*|*" ch341 "*|*" orbbec_depth "*|*" orbbec_rgb "*) ports="$ports 4" ;;
+    *" stm32 "*|*" orbbec_depth "*|*" orbbec_rgb "*) ports="$ports 4" ;;
   esac
   for p in $(fault_ports_from_dmesg); do
     ports="$ports $p"

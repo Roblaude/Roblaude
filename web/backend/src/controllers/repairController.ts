@@ -87,7 +87,8 @@ export async function runRepair(req: Request, res: Response): Promise<void> {
 
   try {
     // shutdown laisse le temps au docker stop (range le bras) avant la coupure
-    const timeout = action === 'reboot' ? 5_000 : action === 'shutdown' ? 12_000 : 20_000
+    // start_perception attend la camera + les checks -> jusqu'a ~90s
+    const timeout = action === 'reboot' ? 5_000 : action === 'shutdown' ? 12_000 : action === 'start_perception' ? 120_000 : 20_000
     const result = await runOnce(robotId, command, timeout)
     const durationMs = Date.now() - startedAt
     await prisma.sshAuditLog

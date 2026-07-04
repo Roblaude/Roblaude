@@ -101,7 +101,10 @@ class ObjectDetector(Node):
         # image annotee pour le reglage HSV en vrai
         self.image_pub = self.create_publisher(Image, '/roblaude/detection_image', 5)
 
-        self.create_timer(0.1, self._detect)  # 10 Hz
+        # 3 Hz par defaut : 10 Hz saturait le Nano (120% CPU) et etouffait
+        # Nav2/AMCL pendant la mission. 3 Hz suffit pour un grasp a l'arret.
+        detect_period = float(self.declare_parameter('detect_period_sec', 0.33).value)
+        self.create_timer(detect_period, self._detect)
         self.get_logger().info(
             f'object_detector pret — couleur {self.target_color}, '
             f'color={self.color_topic} depth={self.depth_topic}')

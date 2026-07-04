@@ -98,8 +98,10 @@ def apply_overrides(params):
     # Humble : bloc "general_goal_checker" (pas "goal_checker"). On suit la liste.
     for gc_name in controller.get('goal_checker_plugins', ['general_goal_checker']):
         if gc_name in controller:
-            controller[gc_name]['xy_goal_tolerance'] = 0.35
-            controller[gc_name]['yaw_goal_tolerance'] = 0.5
+            # compromis pick&place : 0.35 laissait l'objet hors champ camera,
+            # 0.15 fait mouliner l'approche finale (stiction moteurs bas voltage)
+            controller[gc_name]['xy_goal_tolerance'] = 0.22
+            controller[gc_name]['yaw_goal_tolerance'] = 0.35
 
     follow = controller.get('FollowPath')
     if follow:

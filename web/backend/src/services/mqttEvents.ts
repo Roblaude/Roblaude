@@ -19,7 +19,8 @@ export type MqttEvents = {
     png: Buffer
     meta: { width: number; height: number; resolution: number; originX: number; originY: number; stamp: number }
   }
-  scan_update: { robotId: number; ranges: number[]; angleMin: number; angleIncrement: number; frameId: string }
+  // ranges : null = rayon hors portee (inf du lidar serialise en JSON)
+  scan_update: { robotId: number; ranges: (number | null)[]; angleMin: number; angleIncrement: number; frameId: string }
   plan_update: { robotId: number; poses: { x: number; y: number; theta: number }[] }
   frontiers_update: { robotId: number; cells: { x: number; y: number; size: number }[] }
   tf_update: {

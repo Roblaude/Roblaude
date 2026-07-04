@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { useRobotStore } from '../stores/robotStore'
 import { useMissionStore } from '../stores/missionStore'
 import { apiFetch } from '../lib/api'
 import { Square } from 'lucide-react'
@@ -22,21 +21,29 @@ const ACTIVE_MISSION_STATUSES = new Set([
 ])
 
 export function StopButton({ compact = false }: Props) {
-  const status = useRobotStore((s) => s.status)
+  // Volontairement PAS conditionne au statut robot : si le WS decroche en
+  // pleine demo, le STOP doit rester cliquable (l'e-stop part en MQTT direct).
   const missions = useMissionStore((s) => s.missions)
   const fetchMissions = useMissionStore((s) => s.fetchMissions)
   const [pending, setPending] = useState(false)
-  const isActive = status !== 'OFFLINE' && !pending
+  const isActive = !pending
 
   async function handleStop() {
-    if (!isActive) return
-    const active = missions.find((m) => ACTIVE_MISSION_STATUSES.has(m.status))
+    if (pending) return
+    setPending(true)
+    // pas de window.confirm : en urgence chaque seconde compte, et un stop
+    // par erreur se rattrape (la mission est juste annulee)
+    let active = missions.find((m) => ACTIVE_MISSION_STATUSES.has(m.status))
+    if (!active) {
+      // store peut etre vide si on n'a pas visite la page missions
+      await fetchMissions().catch(() => undefined)
+      active = useMissionStore.getState().missions.find((m) => ACTIVE_MISSION_STATUSES.has(m.status))
+    }
     if (!active) {
       toast.info('Aucune mission active à arrêter')
+      setPending(false)
       return
     }
-    if (!window.confirm('Confirmer l\'arrêt d\'urgence du robot ?')) return
-    setPending(true)
     try {
       const res = await apiFetch(`/missions/${active.id}/stop`, {
         method: 'POST',
@@ -85,8 +92,8 @@ export function StopButton({ compact = false }: Props) {
                  active:scale-[0.98] transition-all"
     >
       <span className="relative z-10 flex items-center justify-center gap-2">
-        <Square className="size-3.5" fill="currentColor" />
-        Stop
+        <Square className={`size-3.5 ${pending ? 'animate-pulse' : ''}`} fill="currentColor" />
+        {pending ? 'Stop en cours…' : 'Stop'}
       </span>
       {isActive && (
         <span

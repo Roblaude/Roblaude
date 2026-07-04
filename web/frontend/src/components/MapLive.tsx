@@ -206,7 +206,7 @@ export function MapLive({ currentSnapshotId = null, annotations = [], onAnnotati
       ctx.fillStyle = 'rgba(248, 113, 113, 0.9)'
       for (let i = 0; i < scan.ranges.length; i++) {
         const r = scan.ranges[i]
-        if (!Number.isFinite(r) || r <= 0) continue
+        if (r == null || !Number.isFinite(r) || r <= 0) continue
         const angle = scan.angleMin + i * scan.angleIncrement + robotPose.theta
         const xWorld = robotPose.x + Math.cos(angle) * r
         const yWorld = robotPose.y + Math.sin(angle) * r

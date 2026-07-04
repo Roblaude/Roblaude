@@ -128,6 +128,37 @@ def test_detect_qr_candidates_zbar_without_opencv_detector():
     assert candidates[0].text == "OBJ_ZBAR"
 
 
+class FakeDtApriltags:
+    def detect(self, _gray):
+        return [
+            SimpleNamespace(
+                tag_id=1,
+                decision_margin=91.6,
+                corners=np.array([[10.0, 10.0], [30.0, 10.0], [30.0, 30.0], [10.0, 30.0]]),
+            ),
+            SimpleNamespace(
+                tag_id=15,
+                decision_margin=0.7,  # faux positif typique, sous le seuil
+                corners=np.array([[50.0, 50.0], [60.0, 50.0], [60.0, 60.0], [50.0, 60.0]]),
+            ),
+        ]
+
+
+def test_detect_qr_candidates_dt_apriltags_priority():
+    image = np.zeros((80, 80, 3), dtype=np.uint8)
+    candidates = detect_qr_candidates(
+        image,
+        detector=None,
+        zbar_decode=lambda _image: [],
+        apriltag_detector=FakeDtApriltags(),
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0].text == "APRILTAG_36h11:1"
+    assert candidates[0].px == 20
+    assert candidates[0].py == 20
+
+
 def test_detect_qr_candidates_apriltag_fallback():
     image = np.zeros((80, 80, 3), dtype=np.uint8)
     candidates = detect_qr_candidates(

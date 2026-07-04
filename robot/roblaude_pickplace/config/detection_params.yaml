@@ -22,6 +22,9 @@ object_detector:
     min_detection_depth: 0.15    # ignore en-deca (m)
     depth_scale: 0.001           # 16UC1 mm -> m
 
+    # --- Cadences (le Nano sature vite : nav + vision = budget CPU serre) ---
+    detect_period_sec: 0.33     # 3 Hz — 10 Hz saturait le CPU et cassait la nav
+
     # --- QR code ---
     enable_qr_detection: true
     qr_period_sec: 0.5          # 2 Hz, evite de charger le Jetson pendant la vision

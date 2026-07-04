@@ -103,6 +103,49 @@ def _detect_qr_candidates_zbar(color_img: np.ndarray, zbar_decode: Any = None) -
     return candidates
 
 
+# dt_apriltags (AprilTag 3) est bien plus robuste que cv2.aruco sur les tags
+# inclines/petits. tag36h11 uniquement : c'est la famille de nos tags objets,
+# et chaque famille supplementaire coute du CPU + des faux positifs.
+APRILTAG_FAMILY = "tag36h11"
+APRILTAG_MIN_MARGIN = 20.0
+_apriltag_detector: Any = None
+
+
+def _load_apriltag_detector(apriltag_detector: Any = None) -> Any | None:
+    global _apriltag_detector
+    if apriltag_detector is not None:
+        return apriltag_detector
+    if _apriltag_detector is None:
+        try:
+            from dt_apriltags import Detector
+            _apriltag_detector = Detector(families=APRILTAG_FAMILY, nthreads=2)
+        except Exception:
+            _apriltag_detector = False
+    return _apriltag_detector or None
+
+
+def _detect_qr_candidates_apriltag(color_img: np.ndarray, apriltag_detector: Any = None) -> list[QrCandidate]:
+    detector = _load_apriltag_detector(apriltag_detector)
+    if detector is None:
+        return []
+
+    gray = np.ascontiguousarray(np.asarray(color_img)[..., :3].mean(axis=2).astype(np.uint8))
+    try:
+        results = detector.detect(gray)
+    except Exception:
+        return []
+
+    candidates: list[QrCandidate] = []
+    for tag in results:
+        if getattr(tag, "decision_margin", 0.0) < APRILTAG_MIN_MARGIN:
+            continue
+        text = _marker_text(f"DICT_APRILTAG_{APRILTAG_FAMILY.removeprefix('tag')}", int(tag.tag_id))
+        candidate = _candidate(text, tag.corners)
+        if candidate is not None:
+            candidates.append(candidate)
+    return candidates
+
+
 MARKER_DICTIONARIES = (
     "DICT_APRILTAG_36h11",
     "DICT_APRILTAG_36h10",
@@ -192,11 +235,16 @@ def detect_qr_candidates(
     detector: Any = None,
     zbar_decode: Any = None,
     aruco_module: Any = None,
+    apriltag_detector: Any = None,
 ) -> list[QrCandidate]:
     if color_img is None or getattr(color_img, "ndim", 0) != 3:
         return []
 
     if detector is None:
+        candidates = _detect_qr_candidates_apriltag(color_img, apriltag_detector)
+        if candidates:
+            return candidates
+
         zbar_decode_resolved = _load_zbar_decode(zbar_decode)
         if zbar_decode_resolved is not None:
             candidates = _detect_qr_candidates_zbar(color_img, zbar_decode_resolved)

@@ -54,10 +54,11 @@ usb_present() {
 }
 
 check_usb() {
+  # ch341 = micro, pas utilise par la demo -> warn seulement, ne bloque pas le boot
+  usb_present 1a86:7522 || warn "USB optionnel absent: ch341 (micro)"
   missing=""
   usb_present 2357:012e || missing="$missing wifi"
   usb_present 10c4:ea60 || missing="$missing stm32"
-  usb_present 1a86:7522 || missing="$missing ch341"
   usb_present 2bc5:06a0 || missing="$missing orbbec_depth"
   usb_present 2bc5:0561 || missing="$missing orbbec_rgb"
 
@@ -82,7 +83,6 @@ check_usb() {
   missing_after=""
   usb_present 2357:012e || missing_after="$missing_after wifi"
   usb_present 10c4:ea60 || missing_after="$missing_after stm32"
-  usb_present 1a86:7522 || missing_after="$missing_after ch341"
   usb_present 2bc5:06a0 || missing_after="$missing_after orbbec_depth"
   usb_present 2bc5:0561 || missing_after="$missing_after orbbec_rgb"
   [ -z "$missing_after" ] && { ok "USB revenus apres repair"; write_status "GO" "usb-ok"; return 0; }

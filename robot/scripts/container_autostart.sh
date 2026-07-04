@@ -105,8 +105,11 @@ sleep 5
 # sleep 2
 
 # --- 3) Bridge MQTT (lit /etc/roblaude/broker_ip pour le host) ---
+# Creds optionnels dans /etc/roblaude/mqtt_user + mqtt_pass (broker avec auth)
+MQTT_USER=$(cat /etc/roblaude/mqtt_user 2>/dev/null || true)
+MQTT_PASS=$(cat /etc/roblaude/mqtt_pass 2>/dev/null || true)
 if [ -f "$ROBLAUDE_WS/install/roblaude_mqtt/share/roblaude_mqtt/launch/mqtt_bridge.launch.py" ]; then
-    spawn_once mqtt_bridge ros2 launch roblaude_mqtt mqtt_bridge.launch.py "broker_host:=$BROKER_HOST"
+    spawn_once mqtt_bridge ros2 launch roblaude_mqtt mqtt_bridge.launch.py "broker_host:=$BROKER_HOST" "mqtt_user:=$MQTT_USER" "mqtt_password:=$MQTT_PASS"
 else
     echo "[autostart] roblaude_mqtt pas encore build, bridge non lance"
 fi
@@ -120,6 +123,16 @@ if [ -f "$ROBLAUDE_WS/install/roblaude_nav/lib/roblaude_nav/mission_executor" ];
     spawn_once mission_executor ros2 run roblaude_nav mission_executor
 else
     echo "[autostart] roblaude_nav.mission_executor pas encore build, skip"
+fi
+sleep 2
+
+# --- 4bis) mapping_supervisor — consomme cmd/mapping/* du dashboard ---
+# Leger (simple listener), indispensable pour que le wizard carto/localisation
+# du dashboard marche sans SSH. C'est lui qui lance explore/localization.
+if [ -f "$ROBLAUDE_WS/install/roblaude_nav/lib/roblaude_nav/mapping_supervisor" ]; then
+    spawn_once mapping_supervisor ros2 run roblaude_nav mapping_supervisor
+else
+    echo "[autostart] roblaude_nav.mapping_supervisor pas encore build, skip"
 fi
 sleep 2
 

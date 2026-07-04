@@ -36,3 +36,6 @@ coverage/
 # Config
 claude.md
 .claude/
+
+# secrets mosquitto locaux (cf infra/mosquitto/README.md)
+infra/mosquitto/passwd

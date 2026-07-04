@@ -2,12 +2,19 @@
 // NOM d'action (pas une commande shell), le backend mappe vers une commande SSH
 // fixe. Surface fermee -> pas d'injection possible.
 
-export type RepairAction = 'reconnect_stm32' | 'restart_ros' | 'resync_clock' | 'reboot' | 'shutdown'
+export type RepairAction =
+  | 'reconnect_stm32'
+  | 'restart_ros'
+  | 'resync_clock'
+  | 'start_perception'
+  | 'reboot'
+  | 'shutdown'
 
 export const REPAIR_ACTIONS: readonly RepairAction[] = [
   'reconnect_stm32',
   'restart_ros',
   'resync_clock',
+  'start_perception',
   'reboot',
   'shutdown',
 ]
@@ -16,6 +23,7 @@ export const REPAIR_LABELS: Record<RepairAction, string> = {
   reconnect_stm32: 'Reconnexion STM32',
   restart_ros: 'Redémarrage stack ROS',
   resync_clock: 'Resync horloge',
+  start_perception: 'Démarrer caméra + détecteur',
   reboot: 'Redémarrage Jetson',
   shutdown: 'Extinction propre',
 }
@@ -35,6 +43,9 @@ export function repairCommand(action: RepairAction, nowUtc?: string): string {
       return 'docker restart m3pro'
     case 'resync_clock':
       return `sudo date -u -s "${nowUtc ?? ''}"`
+    case 'start_perception':
+      // idempotent : le script skip ce qui tourne deja
+      return '/home/jetson/roblaude_ws/scripts/start_perception.sh'
     case 'reboot':
       return 'sudo reboot'
     case 'shutdown':

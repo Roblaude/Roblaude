@@ -4,6 +4,7 @@ import {
   listMissions,
   getMission,
   createMission,
+  createDemoMission,
   cancelMission,
   resumeMission,
   stopMission,
@@ -14,6 +15,9 @@ const router = Router()
 
 // GET /api/missions?status=PENDING&type=TRANSPORT&page=1&limit=20
 router.get('/', asyncHandler(listMissions))
+
+// POST /api/missions/demo — mission pick & place preset en 1 clic (soutenance)
+router.post('/demo', asyncHandler(createDemoMission))
 
 // GET /api/missions/:id — detail d'une mission
 router.get('/:id', asyncHandler(getMission))

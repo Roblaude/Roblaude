@@ -192,6 +192,72 @@ export async function createMission(req: Request, res: Response) {
   res.status(201).json({ data: mission })
 }
 
+// POST /api/missions/demo — mission de démo en 1 clic : pick & place preset.
+// Résout tout côté serveur : premier objet dispo, son point comme départ,
+// le point 'base' (ou un autre point) comme retour, premier robot libre.
+export async function createDemoMission(req: Request, res: Response) {
+  if (!req.user) {
+    res.status(401).json({ error: 'Non authentifie' })
+    return
+  }
+
+  const object = await prisma.graspObject.findFirst({
+    where: { available: true },
+    include: { location: true },
+    orderBy: { id: 'asc' },
+  })
+  if (!object) {
+    res.status(409).json({ error: 'Aucun objet disponible pour la démo' })
+    return
+  }
+
+  const toPoint =
+    (await prisma.point.findUnique({ where: { slug: 'base' } })) ??
+    (await prisma.point.findFirst({ where: { id: { not: object.locationId } }, orderBy: { id: 'asc' } }))
+  if (!toPoint) {
+    res.status(409).json({ error: 'Aucun point de retour (créer un point slug "base")' })
+    return
+  }
+
+  const robot = await prisma.robot.findFirst({
+    where: { status: { not: RobotStatus.BUSY } },
+    orderBy: { id: 'asc' },
+  })
+  if (!robot) {
+    res.status(409).json({ error: 'Aucun robot disponible' })
+    return
+  }
+
+  const mission = await prisma.mission.create({
+    data: {
+      type: MissionType.PICK_AND_PLACE,
+      fromPointId: object.locationId,
+      toPointId: toPoint.id,
+      robotId: robot.id,
+      objectId: object.id,
+      userId: req.user.userId,
+    },
+    include: {
+      fromPoint: true,
+      toPoint: true,
+      robot: { select: { id: true, name: true, status: true } },
+      user: { select: { id: true, name: true, email: true } },
+      object: true,
+    },
+  })
+
+  robotMqtt.publishCommand(robot.id, 'mission', {
+    missionId: mission.id,
+    type: mission.type,
+    fromPoint: { x: object.location.x, y: object.location.y, theta: object.location.theta, slug: object.location.slug },
+    toPoint: { x: toPoint.x, y: toPoint.y, theta: toPoint.theta, slug: toPoint.slug },
+    objectId: mission.objectId,
+    targetColor: object.color,
+  })
+
+  res.status(201).json({ data: mission })
+}
+
 // états depuis lesquels on peut annuler
 const CANCELLABLE_STATUSES: MissionStatus[] = [
   MissionStatus.PENDING,

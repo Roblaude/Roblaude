@@ -507,7 +507,8 @@ class RobotMqttAdapter {
 
   private handleScan(robotId: number, data: Record<string, unknown>): void {
     const schema = z.object({
-      ranges: z.array(z.number()),
+      // inf/nan du lidar arrivent en null via JSON -> hors de portee, on ignore ces rayons
+      ranges: z.array(z.number().nullable()),
       angleMin: z.number(),
       angleIncrement: z.number(),
       frameId: z.string(),

@@ -45,6 +45,7 @@ interface MissionStore {
   // override : filtres ponctuels non persistes (ex: dashboard = stats globales)
   fetchMissions: (override?: Partial<MissionFilters>) => Promise<void>
   createMission: (data: { type: MissionType; fromPointId: number; toPointId: number; robotId?: number; objectId?: number }) => Promise<Mission>
+  createDemoMission: () => Promise<Mission>
   cancelMission: (id: number) => Promise<void>
   setCurrentMission: (mission: Mission | null) => void
 }
@@ -91,6 +92,17 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
     }
     const json = await res.json() as { data: Mission }
     set((s) => ({ missions: [json.data, ...s.missions] }))
+    return json.data
+  },
+
+  createDemoMission: async () => {
+    const res = await apiFetch(`/missions/demo`, { method: 'POST' })
+    if (!res.ok) {
+      const err = await res.json() as { error: string }
+      throw new Error(err.error)
+    }
+    const json = await res.json() as { data: Mission }
+    set((s) => ({ missions: [json.data, ...s.missions], currentMission: json.data }))
     return json.data
   },
 

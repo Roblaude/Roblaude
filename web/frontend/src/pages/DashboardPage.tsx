@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useRobotStore, type RobotStatus } from '../stores/robotStore'
 import { useMissionStore } from '../stores/missionStore'
 import { useAuthStore } from '../stores/authStore'
@@ -35,7 +35,25 @@ export function DashboardPage() {
     error,
     fetchStatus,
   } = useRobotStore()
-  const { missions, fetchMissions, total } = useMissionStore()
+  const { missions, fetchMissions, total, createDemoMission } = useMissionStore()
+  const navigate = useNavigate()
+
+  const [demoBusy, setDemoBusy] = useState(false)
+  const [demoError, setDemoError] = useState<string | null>(null)
+
+  const launchDemo = async () => {
+    if (demoBusy) return
+    setDemoBusy(true)
+    setDemoError(null)
+    try {
+      const mission = await createDemoMission()
+      navigate(`/missions/${mission.id}`)
+    } catch (e) {
+      setDemoError(e instanceof Error ? e.message : 'Erreur démo')
+    } finally {
+      setDemoBusy(false)
+    }
+  }
 
   const [mounted, setMounted] = useState(false)
   const [now, setNow] = useState(() => fmtClock(new Date()))
@@ -232,6 +250,36 @@ export function DashboardPage() {
             </div>
           </Link>
 
+          <button
+            type="button"
+            onClick={launchDemo}
+            disabled={demoBusy}
+            className="group relative rounded-sm border border-accent/40 bg-accent/10 hover:bg-accent/20
+                       p-5 transition-colors flex flex-col justify-between min-h-[120px] overflow-hidden
+                       text-left disabled:opacity-60"
+          >
+            <CornerBrackets />
+            <div className="relative">
+              <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground mb-1">
+                · Soutenance
+              </p>
+              <p className="font-mono text-lg text-foreground">
+                Démo
+                <br />
+                1 clic
+              </p>
+              {demoError && (
+                <p className="font-mono text-[10px] text-destructive mt-1">{demoError}</p>
+              )}
+            </div>
+            <div className="relative flex items-center justify-between">
+              <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                {demoBusy ? 'Lancement…' : 'Pick & place auto'}
+              </span>
+              <ArrowRight className="size-4 group-hover:translate-x-0.5 transition-transform" />
+            </div>
+          </button>
+
           <Link
             to="/missions"
             className="group relative rounded-sm border border-border bg-card/40 hover:bg-card/70
@@ -332,9 +380,8 @@ export function DashboardPage() {
         <SystemCard
           icon={Radio}
           label="MQTT"
-          value="En attente"
-          tone="idle"
-          hint="Sprint 4"
+          value={connected ? 'Connecté' : 'N/A'}
+          tone={connected ? 'ok' : 'idle'}
         />
       </section>
 
@@ -687,34 +734,32 @@ function LogStream({
   error: string | null
   status: RobotStatus
 }) {
+  // journal reel : etat connexion + dernieres missions (le store est
+  // rafraichi par le poll du dashboard, donc ca avance pendant une demo)
+  const missions = useMissionStore((s) => s.missions)
   const lines = useMemo(() => {
     const base = [
-      { t: tstamp(-8), k: 'INFO', c: 'text-muted-foreground', m: 'Boot dashboard OK' },
       {
-        t: tstamp(-6),
+        t: tstamp(-2),
         k: connected ? 'OK' : 'ERR',
         c: connected ? 'text-emerald-400' : 'text-destructive',
         m: connected
-          ? 'API backend joignable'
+          ? `API + robot connectés — status: ${status}`
           : error ?? 'API backend injoignable',
       },
     ]
-    if (connected) {
+    for (const m of missions.slice(0, 6)) {
+      const done = m.status === 'COMPLETED'
+      const bad = m.status === 'FAILED' || m.status === 'CANCELLED'
       base.push({
-        t: tstamp(-4),
-        k: 'OK',
-        c: 'text-emerald-400',
-        m: `Robot status: ${status}`,
+        t: new Date(m.updatedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        k: done ? 'OK' : bad ? 'ERR' : 'INFO',
+        c: done ? 'text-emerald-400' : bad ? 'text-destructive' : 'text-primary',
+        m: `Mission #${m.id} ${m.type === 'PICK_AND_PLACE' ? 'pick&place' : 'transport'} — ${m.status}${m.failureReason ? ` (${m.failureReason})` : ''}`,
       })
     }
-    base.push({
-      t: tstamp(-2),
-      k: 'WARN',
-      c: 'text-primary',
-      m: 'Bridge MQTT non branché (Sprint 4)',
-    })
     return base
-  }, [connected, error, status])
+  }, [connected, error, status, missions])
 
   const [visible, setVisible] = useState(0)
   const [now, setNow] = useState(() => clockShort())

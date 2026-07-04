@@ -17,6 +17,7 @@ describe('repairApi', () => {
       'restart_ros',
       'resync_clock',
       'shutdown',
+      'start_perception',
     ])
   })
 

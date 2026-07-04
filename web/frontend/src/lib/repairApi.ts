@@ -3,7 +3,13 @@ import { apiFetch } from './api'
 // API page Reparation (admin). Cote back : /api/admin/robots/:id/{health,repair}.
 // On envoie un NOM d'action, jamais une commande shell.
 
-export type RepairAction = 'reconnect_stm32' | 'restart_ros' | 'resync_clock' | 'reboot' | 'shutdown'
+export type RepairAction =
+  | 'reconnect_stm32'
+  | 'restart_ros'
+  | 'resync_clock'
+  | 'start_perception'
+  | 'reboot'
+  | 'shutdown'
 export type HealthState = 'ok' | 'down' | 'active' | 'dead' | 'up' | 'unknown'
 
 export interface RobotHealth {
@@ -30,6 +36,7 @@ export const REPAIR_LABELS: Record<RepairAction, string> = {
   reconnect_stm32: 'Reconnecter le STM32',
   restart_ros: 'Redémarrer la stack ROS',
   resync_clock: 'Resync horloge',
+  start_perception: 'Démarrer caméra + détecteur',
   reboot: 'Redémarrer le Jetson',
   shutdown: 'Éteindre le robot',
 }

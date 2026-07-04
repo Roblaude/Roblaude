@@ -13,7 +13,8 @@ export interface MapMeta {
 }
 
 export interface ScanData {
-  ranges: number[]
+  // null = rayon hors portee (inf serialise en JSON)
+  ranges: (number | null)[]
   angleMin: number
   angleIncrement: number
 }

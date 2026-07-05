@@ -46,6 +46,7 @@ interface MissionStore {
   fetchMissions: (override?: Partial<MissionFilters>) => Promise<void>
   createMission: (data: { type: MissionType; fromPointId: number; toPointId: number; robotId?: number; objectId?: number }) => Promise<Mission>
   createDemoMission: () => Promise<Mission>
+  confirmLoading: (id: number) => Promise<Mission>
   cancelMission: (id: number) => Promise<void>
   setCurrentMission: (mission: Mission | null) => void
 }
@@ -103,6 +104,20 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
     }
     const json = await res.json() as { data: Mission }
     set((s) => ({ missions: [json.data, ...s.missions], currentMission: json.data }))
+    return json.data
+  },
+
+  confirmLoading: async (id) => {
+    const res = await apiFetch(`/missions/${id}/confirm-loading`, { method: 'POST' })
+    if (!res.ok) {
+      const err = await res.json() as { error: string }
+      throw new Error(err.error)
+    }
+    const json = await res.json() as { data: Mission }
+    set((s) => ({
+      missions: s.missions.map((m) => (m.id === id ? json.data : m)),
+      currentMission: s.currentMission?.id === id ? json.data : s.currentMission,
+    }))
     return json.data
   },
 

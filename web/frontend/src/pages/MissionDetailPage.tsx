@@ -25,7 +25,22 @@ function fmtDate(iso: string): string {
 
 export function MissionDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const { cancelMission } = useMissionStore()
+  const { cancelMission, confirmLoading } = useMissionStore()
+  const [confirming, setConfirming] = useState(false)
+
+  async function handleConfirmLoading() {
+    if (!mission) return
+    setConfirming(true)
+    setError(null)
+    try {
+      const updated = await confirmLoading(mission.id)
+      setMission(updated)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Echec de la confirmation')
+    } finally {
+      setConfirming(false)
+    }
+  }
 
   const [mission, setMission] = useState<Mission | null>(null)
   const [loading, setLoading] = useState(true)
@@ -132,6 +147,17 @@ export function MissionDetailPage() {
         </div>
       ) : (
         !error && <p className="text-gray-500">Mission introuvable.</p>
+      )}
+
+      {mission?.status === 'WAITING_FOR_LOAD' && (
+        <button
+          onClick={handleConfirmLoading}
+          disabled={confirming}
+          className="mt-5 mr-3 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm
+                     font-medium rounded-lg transition-colors disabled:opacity-50"
+        >
+          {confirming ? 'Confirmation…' : 'Confirmer le chargement'}
+        </button>
       )}
 
       {canCancel && (

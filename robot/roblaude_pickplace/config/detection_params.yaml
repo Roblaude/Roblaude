@@ -26,5 +26,7 @@ object_detector:
     detect_period_sec: 0.33     # 3 Hz — 10 Hz saturait le CPU et cassait la nav
 
     # --- QR code ---
-    enable_qr_detection: true
+    # false pour la demo : la cascade apriltag/aruco/QR brule 2 coeurs quand
+    # rien n'est en vue et etouffe la nav. Reactivable pour UC-03.
+    enable_qr_detection: false
     qr_period_sec: 0.5          # 2 Hz, evite de charger le Jetson pendant la vision
